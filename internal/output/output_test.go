@@ -132,6 +132,7 @@ func TestRender_JSONAssertions_Phase5(t *testing.T) {
 	tgt, _ := target.Parse("myvault.vault.azure.net")
 	dnsObs := model.DNSObservation{
 		Status:                  assess.DNSStatusSuccess,
+		ResolverMode:            assess.ResolverModeGoBuiltin,
 		QueryHostname:           "myvault.vault.azure.net",
 		Addresses:               []model.IPObservation{{Address: "10.42.3.7", Version: "IPv4", Classification: assess.AddrPrivate}},
 		AggregateClassification: assess.AggregatePrivateOnly,

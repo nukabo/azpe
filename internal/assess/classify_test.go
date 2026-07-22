@@ -81,7 +81,7 @@ func TestCalculateAggregateClassification(t *testing.T) {
 		{
 			name:            "mixed special and private",
 			classifications: []assess.AddressClassification{assess.AddrPrivate, assess.AddrLoopback},
-			want:            assess.AggregateMixed,
+			want:            assess.AggregateMixedPrivatePublic,
 		},
 	}
 

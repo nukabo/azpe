@@ -116,6 +116,7 @@ const (
 	AggregateTCPNotAttempted       AggregateTCPStatus = "NOT_ATTEMPTED"
 	AggregateTCPNotApplicable      AggregateTCPStatus = "NOT_APPLICABLE"
 	AggregateTCPCanceled           AggregateTCPStatus = "CANCELED"
+	AggregateTCPUnknown            AggregateTCPStatus = "UNKNOWN"
 )
 
 // TCPStatus represents the top-level TCP connectivity probe phase status.
@@ -155,6 +156,7 @@ const (
 	AggregateTLSNotAttempted   AggregateTLSStatus = "NOT_ATTEMPTED"
 	AggregateTLSNotApplicable  AggregateTLSStatus = "NOT_APPLICABLE"
 	AggregateTLSCanceled       AggregateTLSStatus = "CANCELED"
+	AggregateTLSUnknown        AggregateTLSStatus = "UNKNOWN"
 )
 
 // TLSStatus represents the top-level TLS probe phase status.

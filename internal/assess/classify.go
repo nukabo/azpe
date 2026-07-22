@@ -115,5 +115,5 @@ func CalculateAggregateClassification(classifications []AddressClassification) A
 		return AggregateSpecialOnly
 	}
 
-	return AggregateMixed
+	return AggregateMixedPrivatePublic
 }
