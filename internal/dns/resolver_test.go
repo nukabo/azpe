@@ -305,8 +305,8 @@ func TestResolve_IPLiterals(t *testing.T) {
 }
 
 func TestResolve_Timeout(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
-	time.Sleep(2 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
+	time.Sleep(10 * time.Millisecond)
 	defer cancel()
 
 	fake := &FakeResolver{
