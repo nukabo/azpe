@@ -12,7 +12,6 @@ concurrency:
 
 permissions:
   contents: write
-  packages: write
   id-token: write
   attestations: write
 
@@ -49,39 +48,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate Artifact Attestations
+      - name: Generate Artifact Attestations for Native Release Archives
         uses: actions/attest-build-provenance@1c607ba993da3431613c23a54b38d33d997f7422 # v1.4.3
         with:
           subject-path: 'dist/*.tar.gz,dist/*.zip,dist/checksums.txt'
-
-      - name: Set up QEMU for multi-architecture builds
-        uses: docker/setup-qemu-action@49ed15265ed6fac22511164d43f545c770425021 # v3.2.0
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@c47758b77c9736f4b2ef4073d4d51994fabfe349 # v3.7.1
-
-      - name: Log in to GitHub Container Registry (GHCR)
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract Docker metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@369eb791f1063ca38d21c4314e7a83d73507e155 # v5.5.1
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/azpe
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
-
-      - name: Build and push multi-arch Docker image to GHCR
-        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.9.0
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}

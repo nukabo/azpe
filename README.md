@@ -68,27 +68,27 @@ When an application cannot reach an Azure service, engineers commonly cannot dis
 - Cloud Reliability Engineers
 - Enterprise Network & Security Operations Teams
 
-**Zero Prerequisites**: Ordinary users do **not** need Go, Python, Node.js, .NET, Docker, Azure CLI, Azure login, or administrator privileges.
+**Zero Prerequisites**: Ordinary users do **not** need Go, Docker, Python, Node.js, .NET, Azure CLI, Azure login, or administrator privileges (unless placing the binary in a system-wide `PATH` directory).
 
 ---
 
 ## Installation
 
-### Primary Installation Model (Standalone Binary)
+AZPE is released exclusively as standalone, zero-dependency native binaries for Linux, macOS, and Windows.
 
-1. Download the latest release archive for your operating system and architecture from [GitHub Releases](https://github.com/nukabo/azpe/releases):
+1. Download the release archive for your operating system and architecture from [GitHub Releases](https://github.com/nukabo/azpe/releases):
 
-| Platform | Target Archive |
-| -------- | -------------- |
+| Platform | Release Archive |
+| -------- | --------------- |
 | **Linux (AMD64)** | `azpe_0.1.0_linux_amd64.tar.gz` |
 | **Linux (ARM64)** | `azpe_0.1.0_linux_arm64.tar.gz` |
 | **Windows (AMD64)** | `azpe_0.1.0_windows_amd64.zip` |
 | **macOS (Intel AMD64)** | `azpe_0.1.0_darwin_amd64.tar.gz` |
 | **macOS (Apple Silicon ARM64)** | `azpe_0.1.0_darwin_arm64.tar.gz` |
 
-2. Extract the single executable file (`azpe` on Linux/macOS, `azpe.exe` on Windows).
+2. Extract the executable file (`azpe` on Linux/macOS, `azpe.exe` on Windows).
 
-3. Place the executable on your system `PATH` (e.g. `/usr/local/bin` or `%Path%`), or run it directly from your terminal.
+3. Place the executable on your system `PATH` (e.g. `/usr/local/bin` or `%Path%`), or run it directly from your current directory.
 
 ```bash
 # Linux / macOS
@@ -105,7 +105,7 @@ azpe probe myvault.vault.azure.net
 
 ### 1. SHA-256 Checksum Verification
 
-Every release includes a signed `checksums.txt` file. Verify downloaded archives before extraction:
+Every release includes a `checksums.txt` file containing SHA-256 hashes for all native release archives. Verify downloaded archives before extraction:
 
 **Linux / macOS**:
 ```bash
@@ -118,11 +118,11 @@ shasum -a 256 -c checksums.txt
 ```powershell
 Get-FileHash .\azpe_0.1.0_windows_amd64.zip -Algorithm SHA256
 ```
-Compare the resulting hash with the corresponding value in `checksums.txt`.
+Compare the output with the corresponding hash in `checksums.txt`.
 
 ### 2. GitHub Artifact Provenance Attestations
 
-AZPE releases publish GitHub OIDC build provenance attestations. Verify that binaries were built by official GitHub Actions workflows:
+AZPE releases publish GitHub OIDC build provenance attestations. You can verify that downloaded binaries were produced by official GitHub Actions workflows:
 
 ```bash
 gh attestation verify azpe_0.1.0_linux_amd64.tar.gz --repo nukabo/azpe
@@ -130,29 +130,13 @@ gh attestation verify azpe_0.1.0_linux_amd64.tar.gz --repo nukabo/azpe
 
 ---
 
-## Container Image Usage (GHCR)
-
-AZPE is published as a minimal, non-root container image to GitHub Container Registry:
-
-```bash
-# Run probe inside container
-docker run --rm ghcr.io/nukabo/azpe:0.1.0 probe myvault.vault.azure.net
-
-# Run latest stable release
-docker run --rm ghcr.io/nukabo/azpe:latest probe myvault.vault.azure.net
-```
-
-The container image runs as a non-root user (`nobody:65534`), includes standard system CA certificates for TLS validation, contains no shell or package manager, and has entrypoint `/azpe`.
-
----
-
 ## Upgrade & Uninstall
 
 ### Upgrading AZPE
-To upgrade AZPE, download the newest release archive from [GitHub Releases](https://github.com/nukabo/azpe/releases) and replace the existing `azpe` / `azpe.exe` binary file.
+To upgrade AZPE, download the new release archive from [GitHub Releases](https://github.com/nukabo/azpe/releases) and replace your existing `azpe` / `azpe.exe` executable file.
 
 ### Uninstalling AZPE
-To completely uninstall AZPE, delete the `azpe` / `azpe.exe` binary file from your system:
+To uninstall AZPE, simply delete the `azpe` / `azpe.exe` executable file from your system:
 
 ```bash
 # Linux / macOS

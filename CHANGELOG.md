@@ -30,8 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--no-http` flag to skip HTTP probing phase.
 - **Release Engineering & Automation (Phase 6)**:
   - Linker flag build-time version injection (`Version`, `Commit`, `Date`, `SchemaVersion`).
-  - GoReleaser v2 configuration for native cross-platform binaries (`linux/amd64`, `linux/arm64`, `windows/amd64`, `darwin/amd64`, `darwin/arm64`).
+  - GoReleaser v2 configuration for 5 native cross-platform binaries (`linux/amd64`, `linux/arm64`, `windows/amd64`, `darwin/amd64`, `darwin/arm64`).
   - SHA-256 `checksums.txt` generation.
   - GitHub Actions CI (`ci.yml`) and Release (`release.yml`) workflows with minimal permissions.
-  - Artifact build provenance attestations via GitHub OIDC.
-  - Minimal multi-architecture Docker container image published to GHCR (`ghcr.io/nukabo/azpe`).
+  - GitHub Artifact Attestations for native release archives via GitHub OIDC.
