@@ -98,12 +98,12 @@ func (a AggregateClassification) String() string {
 type TCPAddressStatus string
 
 const (
-	TCPAddrConnected        TCPAddressStatus = "CONNECTED"
-	TCPAddrTimedOut         TCPAddressStatus = "TIMED_OUT"
+	TCPAddrConnected         TCPAddressStatus = "CONNECTED"
+	TCPAddrTimedOut          TCPAddressStatus = "TIMED_OUT"
 	TCPAddrConnectionRefused TCPAddressStatus = "CONNECTION_REFUSED"
-	TCPAddrUnreachable      TCPAddressStatus = "UNREACHABLE"
-	TCPAddrCanceled         TCPAddressStatus = "CANCELED"
-	TCPAddrError            TCPAddressStatus = "ERROR"
+	TCPAddrUnreachable       TCPAddressStatus = "UNREACHABLE"
+	TCPAddrCanceled          TCPAddressStatus = "CANCELED"
+	TCPAddrError             TCPAddressStatus = "ERROR"
 )
 
 // AggregateTCPStatus represents the aggregate TCP connectivity status across all probed addresses.
@@ -191,16 +191,16 @@ const (
 	HTTPCatSuccess                HTTPResponseCategory = "SUCCESS"
 	HTTPCatAuthenticationRequired HTTPResponseCategory = "AUTHENTICATION_REQUIRED"
 	HTTPCatAccessDenied           HTTPResponseCategory = "ACCESS_DENIED"
-	HTTPCatNotFound              HTTPResponseCategory = "NOT_FOUND"
-	HTTPCatMethodNotAllowed      HTTPResponseCategory = "METHOD_NOT_ALLOWED"
-	HTTPCatConflict              HTTPResponseCategory = "CONFLICT"
-	HTTPCatThrottled             HTTPResponseCategory = "THROTTLED"
-	HTTPCatServerError           HTTPResponseCategory = "SERVER_ERROR"
-	HTTPCatRedirection           HTTPResponseCategory = "REDIRECTION"
-	HTTPCatClientError           HTTPResponseCategory = "CLIENT_ERROR"
-	HTTPCatInformational         HTTPResponseCategory = "INFORMATIONAL"
-	HTTPCatOtherResponse         HTTPResponseCategory = "OTHER_RESPONSE"
-	HTTPCatNoResponse            HTTPResponseCategory = "NO_RESPONSE"
+	HTTPCatNotFound               HTTPResponseCategory = "NOT_FOUND"
+	HTTPCatMethodNotAllowed       HTTPResponseCategory = "METHOD_NOT_ALLOWED"
+	HTTPCatConflict               HTTPResponseCategory = "CONFLICT"
+	HTTPCatThrottled              HTTPResponseCategory = "THROTTLED"
+	HTTPCatServerError            HTTPResponseCategory = "SERVER_ERROR"
+	HTTPCatRedirection            HTTPResponseCategory = "REDIRECTION"
+	HTTPCatClientError            HTTPResponseCategory = "CLIENT_ERROR"
+	HTTPCatInformational          HTTPResponseCategory = "INFORMATIONAL"
+	HTTPCatOtherResponse          HTTPResponseCategory = "OTHER_RESPONSE"
+	HTTPCatNoResponse             HTTPResponseCategory = "NO_RESPONSE"
 )
 
 // AggregateHTTPStatus represents the aggregate HTTP status across all probed addresses.
