@@ -132,6 +132,57 @@ func Parse(rawInput string) (*Target, error) {
 	}, nil
 }
 
+// RedactQueryValues redacts query parameter values in request URIs or Location headers.
+func RedactQueryValues(path string) string {
+	idx := strings.Index(path, "?")
+	if idx == -1 {
+		return path
+	}
+
+	basePath := path[:idx]
+	queryStr := path[idx+1:]
+	if queryStr == "" {
+		return path
+	}
+
+	// Preserve hash fragment separation if any
+	fragment := ""
+	if fragIdx := strings.Index(queryStr, "#"); fragIdx != -1 {
+		fragment = queryStr[fragIdx:]
+		queryStr = queryStr[:fragIdx]
+	}
+
+	pairs := strings.Split(queryStr, "&")
+	var redactedPairs []string
+	for _, pair := range pairs {
+		if pair == "" {
+			continue
+		}
+		eqIdx := strings.Index(pair, "=")
+		if eqIdx != -1 {
+			key := pair[:eqIdx]
+			redactedPairs = append(redactedPairs, key+"=REDACTED")
+		} else {
+			redactedPairs = append(redactedPairs, pair)
+		}
+	}
+
+	return basePath + "?" + strings.Join(redactedPairs, "&") + fragment
+}
+
+// SanitizeLocation strips user credentials (userinfo) and redacts query parameter values from Location headers.
+func SanitizeLocation(locStr string) string {
+	if locStr == "" {
+		return ""
+	}
+	u, err := url.Parse(locStr)
+	if err != nil {
+		return RedactQueryValues(locStr)
+	}
+	u.User = nil // Strip userinfo (e.g. user:password@)
+	return RedactQueryValues(u.String())
+}
+
 func validateHostnameOrIP(host string) error {
 	// Check if valid IP address (v4 or v6)
 	if ip := net.ParseIP(host); ip != nil {

@@ -21,6 +21,8 @@ const (
 	OwnerDNSOrNetwork          LikelyOwner = "DNS_OR_NETWORK"
 	OwnerNetwork               LikelyOwner = "NETWORK"
 	OwnerApplicationOrIdentity LikelyOwner = "APPLICATION_OR_IDENTITY"
+	OwnerApplication           LikelyOwner = "APPLICATION"
+	OwnerApplicationOrService  LikelyOwner = "APPLICATION_OR_SERVICE"
 	OwnerSecurityOrProxy       LikelyOwner = "SECURITY_OR_PROXY"
 	OwnerUnknown               LikelyOwner = "UNKNOWN"
 )
@@ -186,18 +188,76 @@ func (a AggregateTLSStatus) String() string {
 	return string(a)
 }
 
-// HTTPStatus represents the result of the HTTP health request.
+// HTTPStatus represents the overall result of the HTTP health request phase.
 type HTTPStatus string
 
 const (
-	HTTPStatusOK2XX          HTTPStatus = "OK_2XX"
-	HTTPStatusClientError4XX HTTPStatus = "CLIENT_ERROR_4XX"
-	HTTPStatusServerError5XX HTTPStatus = "SERVER_ERROR_5XX"
-	HTTPStatusFailed         HTTPStatus = "FAILED"
-	HTTPStatusSkipped        HTTPStatus = "SKIPPED"
-	HTTPStatusUnknown        HTTPStatus = "UNKNOWN"
+	HTTPStatusSuccess HTTPStatus = "SUCCESS"
+	HTTPStatusFailed  HTTPStatus = "FAILED"
+	HTTPStatusPartial HTTPStatus = "PARTIAL"
+	HTTPStatusSkipped HTTPStatus = "SKIPPED"
+	HTTPStatusUnknown HTTPStatus = "UNKNOWN"
 )
 
 func (h HTTPStatus) String() string {
 	return string(h)
+}
+
+// HTTPAddressStatus represents the HTTP operation status for a single IP address.
+type HTTPAddressStatus string
+
+const (
+	HTTPAddrResponded         HTTPAddressStatus = "RESPONDED"
+	HTTPAddrTimeout           HTTPAddressStatus = "TIMEOUT"
+	HTTPAddrConnectionFailed  HTTPAddressStatus = "CONNECTION_FAILED"
+	HTTPAddrTLSFailed         HTTPAddressStatus = "TLS_FAILED"
+	HTTPAddrMalformedResponse HTTPAddressStatus = "MALFORMED_RESPONSE"
+	HTTPAddrConnectionClosed  HTTPAddressStatus = "CONNECTION_CLOSED"
+	HTTPAddrCanceled          HTTPAddressStatus = "CANCELED"
+	HTTPAddrError             HTTPAddressStatus = "ERROR"
+	HTTPAddrSkipped           HTTPAddressStatus = "SKIPPED"
+)
+
+func (h HTTPAddressStatus) String() string {
+	return string(h)
+}
+
+// HTTPResponseCategory categorizes the received HTTP status code.
+type HTTPResponseCategory string
+
+const (
+	HTTPCatInformational          HTTPResponseCategory = "INFORMATIONAL"
+	HTTPCatSuccess                HTTPResponseCategory = "SUCCESS"
+	HTTPCatRedirection            HTTPResponseCategory = "REDIRECTION"
+	HTTPCatClientError            HTTPResponseCategory = "CLIENT_ERROR"
+	HTTPCatAuthenticationRequired HTTPResponseCategory = "AUTHENTICATION_REQUIRED"
+	HTTPCatAccessDenied           HTTPResponseCategory = "ACCESS_DENIED"
+	HTTPCatNotFound               HTTPResponseCategory = "NOT_FOUND"
+	HTTPCatMethodNotAllowed       HTTPResponseCategory = "METHOD_NOT_ALLOWED"
+	HTTPCatConflict               HTTPResponseCategory = "CONFLICT"
+	HTTPCatThrottled              HTTPResponseCategory = "THROTTLED"
+	HTTPCatServerError            HTTPResponseCategory = "SERVER_ERROR"
+	HTTPCatOtherResponse          HTTPResponseCategory = "OTHER_RESPONSE"
+	HTTPCatNoResponse             HTTPResponseCategory = "NO_RESPONSE"
+)
+
+func (h HTTPResponseCategory) String() string {
+	return string(h)
+}
+
+// AggregateHTTPStatus represents the overall aggregate status across all HTTP probes.
+type AggregateHTTPStatus string
+
+const (
+	AggregateHTTPAllResponded       AggregateHTTPStatus = "ALL_RESPONDED"
+	AggregateHTTPNoneResponded      AggregateHTTPStatus = "NONE_RESPONDED"
+	AggregateHTTPPartiallyResponded AggregateHTTPStatus = "PARTIALLY_RESPONDED"
+	AggregateHTTPNotAttempted       AggregateHTTPStatus = "NOT_ATTEMPTED"
+	AggregateHTTPNotApplicable      AggregateHTTPStatus = "NOT_APPLICABLE"
+	AggregateHTTPCanceled           AggregateHTTPStatus = "CANCELED"
+	AggregateHTTPUnknown            AggregateHTTPStatus = "UNKNOWN"
+)
+
+func (a AggregateHTTPStatus) String() string {
+	return string(a)
 }

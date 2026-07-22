@@ -26,7 +26,7 @@ When an application cannot reach an Azure service, engineers commonly cannot dis
 5. Application authentication or authorization failures (HTTP 401/403)
 6. Upstream service outages (HTTP 5xx)
 
-`azpe` combines DNS resolution, IP classification, TCP connectivity, TLS validation, and a minimal HTTP request into a single plain-language diagnostic assessment.
+`azpe` combines DNS resolution, IP classification, TCP connectivity, TLS validation, and a minimal HTTP health probe into a single plain-language diagnostic assessment.
 
 ## Target User
 
@@ -36,45 +36,51 @@ When an application cannot reach an Azure service, engineers commonly cannot dis
 
 `azpe` requires **zero Azure permissions**, **no Azure CLI**, **no Azure SDK**, and **no Go runtime** on the target host.
 
-## Critical Product Semantics & Disclaimers
+## Critical Product Semantics & Security Policy
 
 > [!IMPORTANT]
 > **No Control-Plane Claims**: AZPE observes connectivity from the workload's current execution environment without Azure control-plane access.
 > - An approved Azure Private Endpoint configuration in the Azure portal **does not prove workload connectivity** from your environment.
 > - Observing resolution to a private IP address is **evidence**, not formal proof, that the target is using private DNS.
-> - A valid TLS connection proves that the certificate chain is trusted and matches the hostname, not that application access or authorization succeeds.
+> - A valid TLS connection proves that the certificate chain is trusted and matches the hostname.
+> - An HTTP 401 or 403 status response **proves end-to-end HTTPS transport works**, but that the request lacks valid credentials or authorization.
 > - Certificate validation is **NEVER** disabled (`InsecureSkipVerify: false`).
 > 
-> Therefore, AZPE will never claim `Private Endpoint verified`. It states: *Secure private connection looks correct*, *Private connection is reachable*, or *This workload is not using private DNS*.
+> Therefore, AZPE will never claim `Private Endpoint verified`. It states: *The Azure service responded*, *Secure private connection looks correct*, *Private connection is reachable*, or *This workload is not using private DNS*.
 
-## Current Status (Phase 4)
+> [!WARNING]
+> **Target URL Recommendation**: Avoid placing secrets, tokens, or credentials directly in the target URL. AZPE redacts query parameter values in all terminal and JSON output (e.g. `/path?sig=REDACTED`), but the raw query parameter values are still sent over the network to the target service as part of the requested HTTP URL.
 
-Phase 4 implements:
+## Current Status (Phase 5)
+
+Phase 5 implements:
 - Operating-system DNS resolution using Go's standard library resolver.
 - Azure service hostname recognition catalogue (Key Vault, Storage, SQL, Cosmos DB, AI Search, OpenAI, ACR, App Configuration, Service Bus).
 - IP address classification across 10 categories (`PRIVATE`, `PUBLIC`, `LOOPBACK`, `LINK_LOCAL`, `UNSPECIFIED`, `MULTICAST`, `DOCUMENTATION`, `BENCHMARK`, `RESERVED`, `UNKNOWN`).
 - Direct TCP connectivity probing (`net.Dialer.DialContext`) directly against captured IP addresses and target ports without secondary DNS lookups.
 - Direct TLS validation (`crypto/tls`) against captured private IPs using original Azure service hostname for SNI and system trust store certificate verification.
-- Per-address TLS observation, protocol version, cipher suite, and leaf certificate metadata (`VALID`, `HOSTNAME_MISMATCH`, `UNTRUSTED_CERTIFICATE`, `EXPIRED_CERTIFICATE`, `NOT_YET_VALID`, `HANDSHAKE_TIMEOUT`, `HANDSHAKE_FAILED`, `CONNECTION_CLOSED`).
+- Minimal unauthenticated HTTPS GET probing against TLS-valid private IP addresses.
+- Direct-IP HTTPS transport ignoring environment proxies (`HTTP_PROXY`, etc.) and redirect prevention.
+- Bounded response body reading (4 KiB max) and safe response-header allowlisting (`Content-Type`, `Date`, `Server`, `Location`, `Retry-After`, `WWW-Authenticate`, request IDs).
+- Universal query parameter value redaction (e.g. `/path?sig=REDACTED`) across simple, detailed, and JSON outputs.
 - Plain-language diagnostic assessments and exit code contracts:
-  - Exit `0`: Recognized Azure service, private DNS active, all TCP connection probes succeeded, and all TLS validations succeeded (`✓ Secure private connection looks correct`).
+  - Exit `0`: Recognized Azure service, private DNS active, TCP connected, TLS valid, and HTTP response received (2xx, 3xx, 4xx, 429, 5xx) or `--no-http` specified (`✓ The Azure service responded`).
   - Exit `2`: Invalid CLI usage or target syntax error.
   - Exit `3`: DNS lookup failed for a recognized Azure service hostname (`✗ The Azure service name cannot be resolved`).
   - Exit `4`: Recognized Azure service hostname resolved exclusively to public addresses (`✗ This workload is not using private DNS`).
   - Exit `5`: Recognized Azure service hostname resolved privately, but ALL TCP connection probes failed (`✗ The private address cannot be reached`).
   - Exit `6`: Recognized Azure service hostname resolved privately, TCP succeeded, but ALL TLS validations failed (`✗ The certificate does not match the Azure service name`, `✗ The certificate is not trusted by this workload`, `✗ The certificate has expired`).
-  - Exit `8`: Inconclusive / Partial (mixed DNS, partial TCP reachability, partial TLS validity, special-purpose IPs, IP literal, unrecognized non-Azure target).
+  - Exit `7`: DNS, TCP, and TLS succeeded, but NO valid HTTP response was received before timeout / transport error (`✗ The Azure service did not respond in time`).
+  - Exit `8`: Inconclusive / Partial (mixed DNS, partial TCP reachability, partial TLS validity, partial HTTP response, special-purpose IPs, IP literal, unrecognized non-Azure target).
   - Exit `10`: Unexpected internal error.
 
-*Note: HTTP health probes remain untested in Phase 4 and are planned for subsequent phases.*
-
-## Planned v0.1 Roadmap
+## Completed v0.1 Roadmap
 
 - [x] Target parsing, result modeling, CLI routing, JSON & terminal rendering (Phase 1)
 - [x] Operating-system DNS resolution, target recognition & IP address classification (Phase 2)
 - [x] Direct TCP connectivity probing & per-address latency measurement (Phase 3)
 - [x] Direct TLS validation, SNI & system trust store certificate verification (Phase 4)
-- [ ] Minimal HTTP HEAD/GET request & status code classification (Phase 5)
+- [x] Minimal unauthenticated HTTPS GET probe & HTTP status code classification (Phase 5)
 
 ## Building from Source
 

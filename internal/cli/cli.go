@@ -10,6 +10,7 @@ import (
 
 	"github.com/azpe/azpe/internal/assess"
 	"github.com/azpe/azpe/internal/dns"
+	"github.com/azpe/azpe/internal/http"
 	"github.com/azpe/azpe/internal/model"
 	"github.com/azpe/azpe/internal/output"
 	"github.com/azpe/azpe/internal/target"
@@ -21,21 +22,26 @@ import (
 // Run executes the CLI logic with the provided argument list and writers.
 // Returns an exit code suitable for os.Exit.
 func Run(args []string, stdout, stderr io.Writer) int {
-	return RunWithResolverProberAndTLSProber(args, stdout, stderr, &dns.OSResolver{}, &tcp.OSTCPProber{}, &tls.OSTLSProber{})
+	return RunWithResolverProberTLSProberAndHTTPProber(args, stdout, stderr, &dns.OSResolver{}, &tcp.OSTCPProber{}, &tls.OSTLSProber{}, &http.OSHTTPProber{})
 }
 
 // RunWithResolver executes the CLI logic using a custom DNS resolver (useful for testing).
 func RunWithResolver(args []string, stdout, stderr io.Writer, resolver dns.Resolver) int {
-	return RunWithResolverProberAndTLSProber(args, stdout, stderr, resolver, &tcp.OSTCPProber{}, &tls.OSTLSProber{})
+	return RunWithResolverProberTLSProberAndHTTPProber(args, stdout, stderr, resolver, &tcp.OSTCPProber{}, &tls.OSTLSProber{}, &http.OSHTTPProber{})
 }
 
 // RunWithResolverAndProber executes the CLI logic using custom DNS resolver and TCP prober (useful for testing).
 func RunWithResolverAndProber(args []string, stdout, stderr io.Writer, resolver dns.Resolver, prober tcp.Prober) int {
-	return RunWithResolverProberAndTLSProber(args, stdout, stderr, resolver, prober, &tls.OSTLSProber{})
+	return RunWithResolverProberTLSProberAndHTTPProber(args, stdout, stderr, resolver, prober, &tls.OSTLSProber{}, &http.OSHTTPProber{})
 }
 
-// RunWithResolverProberAndTLSProber executes CLI logic with full dependency injection for testing.
+// RunWithResolverProberAndTLSProber executes CLI logic with DNS, TCP, and TLS custom probers.
 func RunWithResolverProberAndTLSProber(args []string, stdout, stderr io.Writer, resolver dns.Resolver, prober tcp.Prober, tlsProber tls.Prober) int {
+	return RunWithResolverProberTLSProberAndHTTPProber(args, stdout, stderr, resolver, prober, tlsProber, &http.OSHTTPProber{})
+}
+
+// RunWithResolverProberTLSProberAndHTTPProber executes CLI logic with full dependency injection for testing.
+func RunWithResolverProberTLSProberAndHTTPProber(args []string, stdout, stderr io.Writer, resolver dns.Resolver, prober tcp.Prober, tlsProber tls.Prober, httpProber http.Prober) int {
 	if len(args) == 0 {
 		printHelp(stdout)
 		return ExitSuccess
@@ -51,7 +57,7 @@ func RunWithResolverProberAndTLSProber(args []string, stdout, stderr io.Writer, 
 		printVersion(stdout)
 		return ExitSuccess
 	case "probe":
-		return runProbe(args[1:], stdout, stderr, resolver, prober, tlsProber)
+		return runProbe(args[1:], stdout, stderr, resolver, prober, tlsProber, httpProber)
 	default:
 		if subcommand == "-h" || subcommand == "--help" {
 			printHelp(stdout)
@@ -93,6 +99,7 @@ EXAMPLES:
   azpe probe myaccount.openai.azure.com
   azpe probe myvault.vault.azure.net --json
   azpe probe myvault.vault.azure.net --details
+  azpe probe myvault.vault.azure.net --no-http
   azpe probe myvault.vault.azure.net --timeout 10s --no-color
 `, version.Version, version.SchemaVersion)
 
@@ -103,7 +110,7 @@ func printVersion(w io.Writer) {
 	fmt.Fprintf(w, "AZPE version %s (JSON schema v%d)\n", version.Version, version.SchemaVersion)
 }
 
-func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver, prober tcp.Prober, tlsProber tls.Prober) int {
+func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver, prober tcp.Prober, tlsProber tls.Prober, httpProber http.Prober) int {
 	fs := flag.NewFlagSet("probe", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
@@ -148,8 +155,6 @@ func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver, pr
 		return ExitUsageOrTargetError
 	}
 
-	_ = noHTTPFlag
-
 	ctx, cancel := context.WithTimeout(context.Background(), *timeoutFlag)
 	defer cancel()
 
@@ -157,11 +162,33 @@ func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver, pr
 
 	var tcpObs model.TCPObservation
 	var tlsObs model.TLSObservation
+	var httpObs model.HTTPObservation
 
 	if tgt.TargetType == target.TargetTypeRecognizedAzure && dnsObs.Status == assess.DNSStatusSuccess && addrObs.Classification == assess.AggregatePrivateOnly {
 		tcpObs = tcp.ProbeAll(ctx, prober, dnsObs.Addresses, tgt.Port)
 		if tcpObs.Status == assess.TCPStatusSuccess || tcpObs.Status == assess.TCPStatusPartial {
 			tlsObs = tls.ProbeAll(ctx, tlsProber, tcpObs, tgt.Hostname)
+			if !*noHTTPFlag && (tlsObs.Status == assess.TLSStatusSuccess || tlsObs.Status == assess.TLSStatusPartial) {
+				httpObs = http.ProbeAll(ctx, httpProber, tlsObs, tgt.RequestPath, tgt.Scheme, tgt.Port, tgt.Hostname)
+			} else if *noHTTPFlag {
+				httpObs = model.HTTPObservation{
+					Status:          assess.HTTPStatusSkipped,
+					AggregateStatus: assess.AggregateHTTPNotAttempted,
+					Method:          "GET",
+					Path:            tgt.RequestPath,
+					Results:         []model.HTTPResultItem{},
+					Note:            "HTTP probing was disabled with --no-http.",
+				}
+			} else {
+				httpObs = model.HTTPObservation{
+					Status:          assess.HTTPStatusSkipped,
+					AggregateStatus: assess.AggregateHTTPNotAttempted,
+					Method:          "GET",
+					Path:            tgt.RequestPath,
+					Results:         []model.HTTPResultItem{},
+					Note:            "HTTP was not attempted because no TLS validation succeeded.",
+				}
+			}
 		} else {
 			tlsObs = model.TLSObservation{
 				Status:          assess.TLSStatusSkipped,
@@ -169,6 +196,14 @@ func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver, pr
 				ServerName:      tgt.Hostname,
 				Results:         []model.TLSResultItem{},
 				Note:            "TLS was not attempted because no TCP connection succeeded.",
+			}
+			httpObs = model.HTTPObservation{
+				Status:          assess.HTTPStatusSkipped,
+				AggregateStatus: assess.AggregateHTTPNotAttempted,
+				Method:          "GET",
+				Path:            tgt.RequestPath,
+				Results:         []model.HTTPResultItem{},
+				Note:            "HTTP was not attempted because no TCP connection succeeded.",
 			}
 		}
 	} else {
@@ -187,9 +222,17 @@ func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver, pr
 			Results:         []model.TLSResultItem{},
 			Note:            "TLS probe not performed",
 		}
+		httpObs = model.HTTPObservation{
+			Status:          assess.HTTPStatusSkipped,
+			AggregateStatus: assess.AggregateHTTPNotAttempted,
+			Method:          "GET",
+			Path:            tgt.RequestPath,
+			Results:         []model.HTTPResultItem{},
+			Note:            "HTTP probe not performed",
+		}
 	}
 
-	res := model.NewResultFromDNSAndTCPAndTLS(tgt, startTime, dnsObs, addrObs, tcpObs, tlsObs)
+	res := model.NewResultFromDNSAndTCPAndTLSAndHTTP(tgt, startTime, dnsObs, addrObs, tcpObs, tlsObs, httpObs)
 
 	opts := output.FormatOptions{
 		JSON:    *jsonFlag,
@@ -204,13 +247,18 @@ func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver, pr
 
 	// Exit Code Mapping based on scenario / evaluation
 	switch res.Assessment.Scenario {
-	case assess.ScenarioPrivateTLSValid, assess.ScenarioPrivateTCPReachable, assess.ScenarioPrivateDNSActive:
+	case assess.ScenarioPrivateHTTPResponded, assess.ScenarioPrivateHTTPAuthRequired, assess.ScenarioPrivateHTTPAccessDenied,
+		assess.ScenarioPrivateHTTPNotFound, assess.ScenarioPrivateHTTPMethodNotAllowed, assess.ScenarioPrivateHTTPThrottled,
+		assess.ScenarioPrivateHTTPServerError, assess.ScenarioPrivateHTTPRedirect, assess.ScenarioPrivateTLSValid,
+		assess.ScenarioPrivateTCPReachable, assess.ScenarioPrivateDNSActive:
 		return ExitSuccess // Exit code 0
+	case assess.ScenarioPrivateHTTPFailed, assess.ScenarioPrivateHTTPTimeout, assess.ScenarioPrivateHTTPMalformed, assess.ScenarioPrivateHTTPTransportFailed:
+		return ExitHTTPFailure // Exit code 7
 	case assess.ScenarioPrivateTLSFailed, assess.ScenarioPrivateTLSHostnameMismatch, assess.ScenarioPrivateTLSUntrusted, assess.ScenarioPrivateTLSExpired, assess.ScenarioPrivateTLSTimeout:
 		return ExitTLSFailure // Exit code 6
 	case assess.ScenarioPrivateTCPUnreachable:
 		return ExitTCPFailure // Exit code 5
-	case assess.ScenarioPrivateTLSPartial, assess.ScenarioPrivateTCPPartial:
+	case assess.ScenarioPrivateHTTPPartial, assess.ScenarioPrivateTLSPartial, assess.ScenarioPrivateTCPPartial:
 		return ExitInconclusive // Exit code 8
 	case assess.ScenarioPrivateDNSNotActive:
 		return ExitNotPrivate // Exit code 4

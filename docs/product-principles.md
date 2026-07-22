@@ -24,17 +24,22 @@ Detailed technical observations (DNS records, TLS ciphers, HTTP status codes) re
 
 ---
 
-### 4. Never confuse network success with application authorization
+### 4. Workload system trust store enforcement; no verification bypasses
+AZPE strictly evaluates certificate trust against the host execution environment's native operating system trust store (`RootCAs: nil`). No CLI flags are provided to supply custom CA bundles or bypass certificate verification (`InsecureSkipVerify: false`). Missing enterprise CAs or untrusted certificates are reported directly as diagnostic findings (*The certificate is not trusted by this workload*) rather than silently worked around.
+
+---
+
+### 5. Never confuse network success with application authorization
 A successful TCP connection or valid TLS handshake does not guarantee application access. Conversely, an HTTP 401 or 403 status code proves that the network path and service are healthy, but credential/identity configuration is failing. AZPE evaluates network path health independently from application authorization.
 
 ---
 
-### 5. Never claim more certainty than the evidence supports
+### 6. Never claim more certainty than the evidence supports
 Without Azure control-plane access, observing resolution to a private IP (RFC 1918 / RFC 4193) is evidence, not absolute proof, of reaching an authorized Azure Private Endpoint. AZPE will never output `Private Endpoint verified`.
 
 ---
 
-### 6. One binary and one primary command
+### 7. One binary and one primary command
 AZPE is distributed as a single, statically linked binary without runtime dependencies. The core user workflow centers on a single primary command:
 ```bash
 azpe probe <target>
@@ -42,18 +47,13 @@ azpe probe <target>
 
 ---
 
-### 7. Diagnose, do not modify
+### 8. Diagnose, do not modify
 AZPE is strictly a diagnostic tool. It will read network signals but will never mutate environment settings, modify DNS entries, alter route tables, or edit configuration files.
 
 ---
 
-### 8. No automatic remediation
+### 9. No automatic remediation
 AZPE delivers actionable diagnosis and next steps for human operators or automated pipelines, but does not perform automated remediation actions.
-
----
-
-### 9. No AI runtime dependency
-AZPE relies on deterministic logic, explicit state models, and established network rules. It contains no AI/LLM runtime dependencies.
 
 ---
 

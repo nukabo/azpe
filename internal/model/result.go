@@ -230,12 +230,134 @@ func (t TLSObservation) GetResults() []assess.MinimalTLSResultItem {
 	return items
 }
 
-// HTTPObservation contains minimal HTTP probe observations.
+// SafeHTTPHeaders contains safe response header metadata.
+type SafeHTTPHeaders struct {
+	ContentType           string `json:"contentType,omitempty"`
+	ContentLength         *int64 `json:"contentLength,omitempty"`
+	Date                  string `json:"date,omitempty"`
+	Server                string `json:"server,omitempty"`
+	Location              string `json:"location,omitempty"`
+	RetryAfter            string `json:"retryAfter,omitempty"`
+	WWWAuthenticateScheme string `json:"wwwAuthenticateScheme,omitempty"`
+	RequestID             string `json:"requestId,omitempty"`
+	CorrelationRequestID  string `json:"correlationRequestId,omitempty"`
+	ClientRequestID       string `json:"clientRequestId,omitempty"`
+}
+
+// HTTPResultItem represents a single HTTP request/response observation for an address.
+type HTTPResultItem struct {
+	Address          string                       `json:"address"`
+	Version          string                       `json:"version"` // "IPv4" or "IPv6"
+	Classification   assess.AddressClassification `json:"classification"`
+	Destination      string                       `json:"destination"` // "10.42.3.7:443" or "[fd00::7]:443"
+	Port             int                          `json:"port"`
+	ServerName       string                       `json:"serverName"`
+	Host             string                       `json:"host"`
+	Method           string                       `json:"method"` // "GET"
+	RequestURI       string                       `json:"requestUri"`
+	Status           assess.HTTPAddressStatus     `json:"status"`
+	StatusCode       int                          `json:"statusCode,omitempty"`
+	StatusText       string                       `json:"statusText,omitempty"`
+	ResponseCategory assess.HTTPResponseCategory  `json:"responseCategory"`
+	DurationMs       int64                        `json:"durationMs"`
+	RedirectFollowed bool                         `json:"redirectFollowed"`
+	Headers          *SafeHTTPHeaders             `json:"headers,omitempty"`
+	BodyReadBytes    int                          `json:"bodyReadBytes"`
+	BodyTruncated    bool                         `json:"bodyTruncated"`
+	FailureStage     string                       `json:"failureStage,omitempty"`
+	ErrorCategory    string                       `json:"errorCategory,omitempty"`
+	Error            string                       `json:"error,omitempty"`
+}
+
+func (r HTTPResultItem) GetAddress() string {
+	return r.Address
+}
+
+func (r HTTPResultItem) GetDestination() string {
+	return r.Destination
+}
+
+func (r HTTPResultItem) GetPort() int {
+	return r.Port
+}
+
+func (r HTTPResultItem) GetServerName() string {
+	return r.ServerName
+}
+
+func (r HTTPResultItem) GetHost() string {
+	return r.Host
+}
+
+func (r HTTPResultItem) GetMethod() string {
+	return r.Method
+}
+
+func (r HTTPResultItem) GetRequestURI() string {
+	return r.RequestURI
+}
+
+func (r HTTPResultItem) GetStatus() assess.HTTPAddressStatus {
+	return r.Status
+}
+
+func (r HTTPResultItem) GetStatusCode() int {
+	return r.StatusCode
+}
+
+func (r HTTPResultItem) GetStatusText() string {
+	return r.StatusText
+}
+
+func (r HTTPResultItem) GetResponseCategory() assess.HTTPResponseCategory {
+	return r.ResponseCategory
+}
+
+func (r HTTPResultItem) GetDurationMs() int64 {
+	return r.DurationMs
+}
+
+func (r HTTPResultItem) GetRedirectFollowed() bool {
+	return r.RedirectFollowed
+}
+
+func (r HTTPResultItem) GetErrorCategory() string {
+	return r.ErrorCategory
+}
+
+func (r HTTPResultItem) GetError() string {
+	return r.Error
+}
+
+// HTTPObservation contains HTTP request/response observations.
 type HTTPObservation struct {
-	Status     assess.HTTPStatus `json:"status"`
-	StatusCode int               `json:"statusCode,omitempty"`
-	StatusText string            `json:"statusText,omitempty"`
-	Note       string            `json:"note,omitempty"`
+	Status          assess.HTTPStatus          `json:"status"`
+	AggregateStatus assess.AggregateHTTPStatus `json:"aggregateStatus,omitempty"`
+	Method          string                     `json:"method,omitempty"`
+	Path            string                     `json:"path,omitempty"`
+	DurationMs      int64                      `json:"durationMs"`
+	Results         []HTTPResultItem           `json:"results"`
+	Note            string                     `json:"note,omitempty"`
+}
+
+func (h HTTPObservation) GetAggregateStatus() assess.AggregateHTTPStatus {
+	return h.AggregateStatus
+}
+
+func (h HTTPObservation) GetMethod() string {
+	return h.Method
+}
+
+func (h HTTPObservation) GetPath() string {
+	return h.Path
+}
+
+func (h HTTPObservation) GetResults() []assess.MinimalHTTPResultItem {
+	var items []assess.MinimalHTTPResultItem
+	for _, r := range h.Results {
+		items = append(items, r)
+	}
+	return items
 }
 
 // AssessmentInfo summarizes findings, likely ownership, recommendations, and UX scenario.
@@ -250,12 +372,11 @@ type AssessmentInfo struct {
 	NextAction  string                    `json:"nextAction,omitempty"`
 }
 
-// NewResultFromDNSAndTCPAndTLS evaluates DNS, TCP, and TLS observations and builds the diagnostic Result.
-func NewResultFromDNSAndTCPAndTLS(tgt *target.Target, startTime time.Time, dnsObs DNSObservation, addrObs AddrObservation, tcpObs TCPObservation, tlsObs TLSObservation) *Result {
+// NewResultFromDNSAndTCPAndTLSAndHTTP evaluates all probe observations and builds the diagnostic Result.
+func NewResultFromDNSAndTCPAndTLSAndHTTP(tgt *target.Target, startTime time.Time, dnsObs DNSObservation, addrObs AddrObservation, tcpObs TCPObservation, tlsObs TLSObservation, httpObs HTTPObservation) *Result {
 	hostname, _ := os.Hostname()
 	duration := time.Since(startTime).Milliseconds()
 
-	// Extract IP list and classifications for evaluation
 	var addrsList []string
 	var classList []assess.AddressClassification
 	for _, ipObs := range dnsObs.Addresses {
@@ -263,7 +384,7 @@ func NewResultFromDNSAndTCPAndTLS(tgt *target.Target, startTime time.Time, dnsOb
 		classList = append(classList, ipObs.Classification)
 	}
 
-	eval := assess.Evaluate(tgt, dnsObs.Status, addrObs.Classification, addrsList, classList, dnsObs.ErrorCategory, dnsObs.ErrorMessage, tcpObs, tlsObs)
+	eval := assess.Evaluate(tgt, dnsObs.Status, addrObs.Classification, addrsList, classList, dnsObs.ErrorCategory, dnsObs.ErrorMessage, tcpObs, tlsObs, httpObs)
 
 	errorsList := []string{}
 	if dnsObs.ErrorMessage != "" && eval.Scenario == assess.ScenarioDNSLookupFailed {
@@ -277,6 +398,11 @@ func NewResultFromDNSAndTCPAndTLS(tgt *target.Target, startTime time.Time, dnsOb
 	for _, tlsRes := range tlsObs.Results {
 		if tlsRes.Error != "" {
 			errorsList = append(errorsList, tlsRes.Error)
+		}
+	}
+	for _, httpRes := range httpObs.Results {
+		if httpRes.Error != "" {
+			errorsList = append(errorsList, httpRes.Error)
 		}
 	}
 
@@ -304,6 +430,9 @@ func NewResultFromDNSAndTCPAndTLS(tgt *target.Target, startTime time.Time, dnsOb
 	if tlsObs.Results == nil {
 		tlsObs.Results = []TLSResultItem{}
 	}
+	if httpObs.Results == nil {
+		httpObs.Results = []HTTPResultItem{}
+	}
 	for i := range tlsObs.Results {
 		if tlsObs.Results[i].LeafCertificate != nil && tlsObs.Results[i].LeafCertificate.DNSNames == nil {
 			tlsObs.Results[i].LeafCertificate.DNSNames = []string{}
@@ -325,10 +454,7 @@ func NewResultFromDNSAndTCPAndTLS(tgt *target.Target, startTime time.Time, dnsOb
 		Address: addrObs,
 		TCP:     tcpObs,
 		TLS:     tlsObs,
-		HTTP: HTTPObservation{
-			Status: assess.HTTPStatusSkipped,
-			Note:   "HTTP request not implemented in Phase 4",
-		},
+		HTTP:    httpObs,
 		Assessment: AssessmentInfo{
 			Scenario:    eval.Scenario,
 			State:       eval.State,
@@ -344,7 +470,20 @@ func NewResultFromDNSAndTCPAndTLS(tgt *target.Target, startTime time.Time, dnsOb
 	}
 }
 
-// NewResultFromDNSAndTCP evaluates DNS and TCP observations without TLS probing (helper).
+// NewResultFromDNSAndTCPAndTLS evaluates DNS, TCP, and TLS observations without HTTP probing (helper).
+func NewResultFromDNSAndTCPAndTLS(tgt *target.Target, startTime time.Time, dnsObs DNSObservation, addrObs AddrObservation, tcpObs TCPObservation, tlsObs TLSObservation) *Result {
+	httpObs := HTTPObservation{
+		Status:          assess.HTTPStatusSkipped,
+		AggregateStatus: assess.AggregateHTTPNotAttempted,
+		Method:          "GET",
+		Path:            tgt.RequestPath,
+		Results:         []HTTPResultItem{},
+		Note:            "HTTP probe not performed",
+	}
+	return NewResultFromDNSAndTCPAndTLSAndHTTP(tgt, startTime, dnsObs, addrObs, tcpObs, tlsObs, httpObs)
+}
+
+// NewResultFromDNSAndTCP evaluates DNS and TCP observations without TLS/HTTP probing (helper).
 func NewResultFromDNSAndTCP(tgt *target.Target, startTime time.Time, dnsObs DNSObservation, addrObs AddrObservation, tcpObs TCPObservation) *Result {
 	tlsObs := TLSObservation{
 		Status:          assess.TLSStatusSkipped,
@@ -356,7 +495,7 @@ func NewResultFromDNSAndTCP(tgt *target.Target, startTime time.Time, dnsObs DNSO
 	return NewResultFromDNSAndTCPAndTLS(tgt, startTime, dnsObs, addrObs, tcpObs, tlsObs)
 }
 
-// NewResultFromDNS evaluates DNS observations without TCP or TLS probing (helper).
+// NewResultFromDNS evaluates DNS observations without TCP/TLS/HTTP probing (helper).
 func NewResultFromDNS(tgt *target.Target, startTime time.Time, dnsObs DNSObservation, addrObs AddrObservation) *Result {
 	tcpObs := TCPObservation{
 		Status:          assess.TCPStatusSkipped,

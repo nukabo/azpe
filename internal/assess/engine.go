@@ -33,6 +33,21 @@ const (
 	ScenarioPrivateTLSUntrusted        AssessmentScenario = "PRIVATE_TLS_UNTRUSTED"
 	ScenarioPrivateTLSExpired          AssessmentScenario = "PRIVATE_TLS_EXPIRED"
 	ScenarioPrivateTLSTimeout          AssessmentScenario = "PRIVATE_TLS_TIMEOUT"
+
+	// Phase 5 HTTP Scenarios
+	ScenarioPrivateHTTPResponded        AssessmentScenario = "PRIVATE_HTTP_RESPONDED"
+	ScenarioPrivateHTTPAuthRequired     AssessmentScenario = "PRIVATE_HTTP_AUTH_REQUIRED"
+	ScenarioPrivateHTTPAccessDenied     AssessmentScenario = "PRIVATE_HTTP_ACCESS_DENIED"
+	ScenarioPrivateHTTPNotFound         AssessmentScenario = "PRIVATE_HTTP_NOT_FOUND"
+	ScenarioPrivateHTTPMethodNotAllowed AssessmentScenario = "PRIVATE_HTTP_METHOD_NOT_ALLOWED"
+	ScenarioPrivateHTTPThrottled        AssessmentScenario = "PRIVATE_HTTP_THROTTLED"
+	ScenarioPrivateHTTPServerError      AssessmentScenario = "PRIVATE_HTTP_SERVER_ERROR"
+	ScenarioPrivateHTTPRedirect         AssessmentScenario = "PRIVATE_HTTP_REDIRECT"
+	ScenarioPrivateHTTPFailed           AssessmentScenario = "PRIVATE_HTTP_FAILED"
+	ScenarioPrivateHTTPTimeout          AssessmentScenario = "PRIVATE_HTTP_TIMEOUT"
+	ScenarioPrivateHTTPMalformed        AssessmentScenario = "PRIVATE_HTTP_MALFORMED"
+	ScenarioPrivateHTTPTransportFailed  AssessmentScenario = "PRIVATE_HTTP_TRANSPORT_FAILED"
+	ScenarioPrivateHTTPPartial          AssessmentScenario = "PRIVATE_HTTP_PARTIAL"
 )
 
 // Evaluation represents the structured outcome of the assessment decision engine.
@@ -88,8 +103,35 @@ type MinimalTLSResultItem interface {
 	GetError() string
 }
 
-// Evaluate determines the Assessment result and UX scenario from target, DNS, TCP, and TLS observations.
-func Evaluate(tgt *target.Target, dnsStatus DNSStatus, aggClass AggregateClassification, addresses []string, classifications []AddressClassification, errCat, errMsg string, tcpObs MinimalTCPObservation, tlsObs MinimalTLSObservation) Evaluation {
+// MinimalHTTPObservation contains fields required for Evaluation without importing model package.
+type MinimalHTTPObservation interface {
+	GetAggregateStatus() AggregateHTTPStatus
+	GetMethod() string
+	GetPath() string
+	GetResults() []MinimalHTTPResultItem
+}
+
+// MinimalHTTPResultItem interface for per-address HTTP result details.
+type MinimalHTTPResultItem interface {
+	GetAddress() string
+	GetDestination() string
+	GetPort() int
+	GetServerName() string
+	GetHost() string
+	GetMethod() string
+	GetRequestURI() string
+	GetStatus() HTTPAddressStatus
+	GetStatusCode() int
+	GetStatusText() string
+	GetResponseCategory() HTTPResponseCategory
+	GetDurationMs() int64
+	GetRedirectFollowed() bool
+	GetErrorCategory() string
+	GetError() string
+}
+
+// Evaluate determines the Assessment result and UX scenario from target, DNS, TCP, TLS, and HTTP observations.
+func Evaluate(tgt *target.Target, dnsStatus DNSStatus, aggClass AggregateClassification, addresses []string, classifications []AddressClassification, errCat, errMsg string, tcpObs MinimalTCPObservation, tlsObs MinimalTLSObservation, httpObs MinimalHTTPObservation) Evaluation {
 	// 1. IP Literal Target
 	if tgt.TargetType == target.TargetTypeIPLiteral {
 		ex := "An IP address was provided instead of an Azure service hostname."
@@ -169,14 +211,105 @@ func Evaluate(tgt *target.Target, dnsStatus DNSStatus, aggClass AggregateClassif
 
 	switch aggClass {
 	case AggregatePrivateOnly:
-		// Evaluate TCP and TLS Probing Results for Private-Only DNS
+		// Evaluate TCP, TLS, and HTTP Probing Results for Private-Only DNS
 		if tcpObs != nil && tcpObs.GetAggregateStatus() != AggregateTCPNotAttempted && tcpObs.GetAggregateStatus() != AggregateTCPNotApplicable {
 			switch tcpObs.GetAggregateStatus() {
 			case AggregateTCPAllConnected:
-				// Evaluate Phase 4 TLS Probing
 				if tlsObs != nil && tlsObs.GetAggregateStatus() != AggregateTLSNotAttempted && tlsObs.GetAggregateStatus() != AggregateTLSNotApplicable {
 					switch tlsObs.GetAggregateStatus() {
 					case AggregateTLSAllValid:
+						// Evaluate Phase 5 HTTP Probing
+						if httpObs != nil && httpObs.GetAggregateStatus() != AggregateHTTPNotAttempted && httpObs.GetAggregateStatus() != AggregateHTTPNotApplicable {
+							switch httpObs.GetAggregateStatus() {
+							case AggregateHTTPAllResponded:
+								domCat, domCode, domText, domRes := determineDominantHTTPResponse(httpObs.GetResults())
+								return buildHTTPRespondedEvaluation(tgt, httpObs.GetResults(), domCat, domCode, domText, domRes)
+
+							case AggregateHTTPNoneResponded:
+								domStatus := determineDominantHTTPFailureStatus(httpObs.GetResults())
+								switch domStatus {
+								case HTTPAddrTimeout:
+									var lines []string
+									for _, r := range httpObs.GetResults() {
+										lines = append(lines, fmt.Sprintf("%s → %s", tgt.Hostname, r.GetDestination()))
+									}
+									destBlock := strings.Join(lines, "\n")
+									ex := "The secure connection works, but no HTTP response was received before the timeout."
+									imp := "The HTTP request timed out waiting for headers from the Azure service."
+									sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Valid\nAzure service   Response timed out\n\nThe secure connection works, but no HTTP response was received before the timeout.\n\nWhat to do:\nSend the detailed result to the application platform or service owner team.", destBlock)
+									return Evaluation{
+										Scenario:    ScenarioPrivateHTTPTimeout,
+										ExitCode:    7,
+										Title:       "The Azure service did not respond in time",
+										Explanation: ex,
+										Impact:      imp,
+										Summary:     sum,
+										State:       AssessmentBroken,
+										LikelyOwner: OwnerApplicationOrService,
+										NextAction:  "Send the detailed result to the application platform or service owner team.",
+									}
+
+								case HTTPAddrMalformedResponse:
+									ex := "The destination responded, but the response was not valid HTTP."
+									imp := "HTTP transport failed because the response could not be parsed."
+									sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Valid\nAzure service   Invalid HTTP response\n\nWhat to do:\nSend the detailed result to the application platform or service owner team.", tgt.Hostname)
+									return Evaluation{
+										Scenario:    ScenarioPrivateHTTPMalformed,
+										ExitCode:    7,
+										Title:       "The destination did not return a valid HTTP response",
+										Explanation: ex,
+										Impact:      imp,
+										Summary:     sum,
+										State:       AssessmentBroken,
+										LikelyOwner: OwnerApplicationOrService,
+										NextAction:  "Send the detailed result to the application platform or service owner team.",
+									}
+
+								default:
+									ex := "Earlier checks succeeded, but the final HTTPS request failed before the service returned a response."
+									imp := "The HTTPS request could not be completed."
+									sum := fmt.Sprintf("%s\n\nEarlier checks succeeded, but the final HTTPS request failed before the service returned a response.\n\nWhat to do:\nRun AZPE again. If the result repeats, send the detailed output to your application platform or network security team.", tgt.Hostname)
+									return Evaluation{
+										Scenario:    ScenarioPrivateHTTPTransportFailed,
+										ExitCode:    7,
+										Title:       "The HTTPS request could not be completed",
+										Explanation: ex,
+										Impact:      imp,
+										Summary:     sum,
+										State:       AssessmentBroken,
+										LikelyOwner: OwnerSecurityOrProxy,
+										NextAction:  "Run AZPE again. If the result repeats, send the detailed output to your application platform or network security team.",
+									}
+								}
+
+							case AggregateHTTPPartiallyResponded:
+								var lines []string
+								for _, r := range httpObs.GetResults() {
+									if r.GetStatus() == HTTPAddrResponded {
+										lines = append(lines, fmt.Sprintf("%-18s HTTP %d %s", r.GetDestination(), r.GetStatusCode(), r.GetStatusText()))
+									} else {
+										lines = append(lines, fmt.Sprintf("%-18s %s", r.GetDestination(), formatShortHTTPFailure(r.GetStatus())))
+									}
+								}
+								destBlock := strings.Join(lines, "\n")
+								ex := "At least one private address returned an HTTP response and at least one did not."
+								imp := "The application may behave failure-prone or intermittently depending on which address it uses."
+								sum := fmt.Sprintf("%s\n\nThe application may behave intermittently depending on which address it uses.\n\nWhat to do:\nSend the detailed result to your application platform or service owner team.", destBlock)
+								return Evaluation{
+									Scenario:    ScenarioPrivateHTTPPartial,
+									ExitCode:    8,
+									Title:       "The Azure service responded on only some private addresses",
+									Explanation: ex,
+									Impact:      imp,
+									Summary:     sum,
+									State:       AssessmentUnknown,
+									LikelyOwner: OwnerApplicationOrService,
+									NextAction:  "Send the detailed result to your application platform or service owner team.",
+								}
+							}
+						}
+
+						// Phase 4 TLS Valid fallback (when --no-http is used)
 						title := "Secure private connection looks correct"
 						if len(tlsObs.GetResults()) > 1 {
 							title = "Secure private connections look correct"
@@ -197,8 +330,8 @@ func Evaluate(tgt *target.Target, dnsStatus DNSStatus, aggClass AggregateClassif
 							tlsStatusStr = "Valid for all addresses"
 						}
 						ex := "The Azure service hostname resolved privately, and this workload established a valid, trusted TLS connection to every private address."
-						imp := "DNS, TCP, and TLS validation look correct. Service response and application authorization remain untested."
-						sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      %s\nTLS             %s\n\nService response and application access not tested yet.", destBlock, connStatusStr, tlsStatusStr)
+						imp := "DNS, TCP, and TLS validation look correct."
+						sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      %s\nTLS             %s\nAzure service   Not tested\n\nHTTP probing was disabled with --no-http.", destBlock, connStatusStr, tlsStatusStr)
 						return Evaluation{
 							Scenario:    ScenarioPrivateTLSValid,
 							ExitCode:    0,
@@ -350,35 +483,6 @@ func Evaluate(tgt *target.Target, dnsStatus DNSStatus, aggClass AggregateClassif
 							NextAction:  "Send the detailed result to your network security team.",
 						}
 					}
-				}
-
-				// Untested TLS (Phase 3 fallback)
-				title := "Private connection is reachable"
-				if len(tcpObs.GetResults()) > 1 {
-					title = "Private connections are reachable"
-				}
-				var lines []string
-				for _, r := range tcpObs.GetResults() {
-					lines = append(lines, fmt.Sprintf("%s → %s", tgt.Hostname, r.GetDestination()))
-				}
-				destBlock := strings.Join(lines, "\n")
-				connStatusStr := "Working"
-				if len(tcpObs.GetResults()) > 1 {
-					connStatusStr = "Working for all addresses"
-				}
-				ex := "The Azure service hostname resolved privately, and this workload established a TCP connection to every returned private address."
-				imp := "DNS and TCP connectivity look correct. TLS and the service response remain untested."
-				sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      %s\n\nSecure connection and service response not tested yet.", destBlock, connStatusStr)
-				return Evaluation{
-					Scenario:    ScenarioPrivateTCPReachable,
-					ExitCode:    0,
-					Title:       title,
-					Explanation: ex,
-					Impact:      imp,
-					Summary:     sum,
-					State:       AssessmentWorking,
-					LikelyOwner: OwnerUnknown,
-					NextAction:  "",
 				}
 
 			case AggregateTCPNoneConnected:
@@ -587,6 +691,207 @@ func Evaluate(tgt *target.Target, dnsStatus DNSStatus, aggClass AggregateClassif
 	}
 }
 
+func buildHTTPRespondedEvaluation(tgt *target.Target, results []MinimalHTTPResultItem, cat HTTPResponseCategory, code int, text string, res MinimalHTTPResultItem) Evaluation {
+	var lines []string
+	for _, r := range results {
+		lines = append(lines, fmt.Sprintf("%s → %s\nHTTP %d %s", tgt.Hostname, r.GetDestination(), r.GetStatusCode(), r.GetStatusText()))
+	}
+	destBlock := strings.Join(lines, "\n\n")
+
+	title := "The Azure service responded"
+	state := AssessmentWorking
+
+	switch cat {
+	case HTTPCatSuccess:
+		serviceLine := "Responded successfully"
+		ex := "The private network and HTTPS path look correct. The Azure service returned a successful response."
+		imp := "End-to-end network and HTTPS transport are working."
+		sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Valid\nAzure service   %s\n\nThe private network and HTTPS path look correct.", destBlock, serviceLine)
+		return Evaluation{
+			Scenario:    ScenarioPrivateHTTPResponded,
+			ExitCode:    0,
+			Title:       title,
+			Explanation: ex,
+			Impact:      imp,
+			Summary:     sum,
+			State:       state,
+			LikelyOwner: OwnerUnknown,
+			NextAction:  "",
+		}
+
+	case HTTPCatAuthenticationRequired:
+		serviceLine := "Authentication required"
+		ex := "The private connection is working. The Azure service responded and requires authentication."
+		imp := "Network and HTTPS transport are working. The application may be missing or sending invalid credentials."
+		sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Valid\nAzure service   %s\n\nThe private connection is working. The service requires authentication.\n\nWhat to do:\nIf the application still fails, check how it obtains and sends its Azure credentials.", destBlock, serviceLine)
+		return Evaluation{
+			Scenario:    ScenarioPrivateHTTPAuthRequired,
+			ExitCode:    0,
+			Title:       title,
+			Explanation: ex,
+			Impact:      imp,
+			Summary:     sum,
+			State:       state,
+			LikelyOwner: OwnerApplicationOrIdentity,
+			NextAction:  "If the application still fails, check how it obtains and sends its Azure credentials.",
+		}
+
+	case HTTPCatAccessDenied:
+		serviceLine := "Access denied"
+		ex := "The private connection is working. The Azure service denied this unauthenticated request."
+		imp := "Network and HTTPS transport are working. The application may require an authorized identity or RBAC role."
+		sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Valid\nAzure service   %s\n\nThe private connection is working. The service denied this unauthenticated request.\n\nWhat to do:\nIf the application still fails, check its identity and Azure permissions.", destBlock, serviceLine)
+		return Evaluation{
+			Scenario:    ScenarioPrivateHTTPAccessDenied,
+			ExitCode:    0,
+			Title:       title,
+			Explanation: ex,
+			Impact:      imp,
+			Summary:     sum,
+			State:       state,
+			LikelyOwner: OwnerApplicationOrIdentity,
+			NextAction:  "If the application still fails, check its identity and Azure permissions.",
+		}
+
+	case HTTPCatNotFound:
+		serviceLine := "Requested path not found"
+		ex := "The private connection is working. The Azure service responded that the requested path was not found."
+		imp := "Network and HTTPS transport are working."
+		sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Valid\nAzure service   %s\n\nThe private connection is working. The requested path was not found.", destBlock, serviceLine)
+		return Evaluation{
+			Scenario:    ScenarioPrivateHTTPNotFound,
+			ExitCode:    0,
+			Title:       title,
+			Explanation: ex,
+			Impact:      imp,
+			Summary:     sum,
+			State:       state,
+			LikelyOwner: OwnerApplication,
+			NextAction:  "",
+		}
+
+	case HTTPCatMethodNotAllowed:
+		serviceLine := "Method not allowed"
+		ex := "The private connection is working. The service does not allow the probe's GET method for this path."
+		imp := "Network and HTTPS transport are working."
+		sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Valid\nAzure service   %s\n\nThe private connection is working. The service does not allow the probe's GET method for this path.", destBlock, serviceLine)
+		return Evaluation{
+			Scenario:    ScenarioPrivateHTTPMethodNotAllowed,
+			ExitCode:    0,
+			Title:       title,
+			Explanation: ex,
+			Impact:      imp,
+			Summary:     sum,
+			State:       state,
+			LikelyOwner: OwnerApplication,
+			NextAction:  "",
+		}
+
+	case HTTPCatThrottled:
+		serviceLine := "Request throttled"
+		ex := "The private connection is working. The Azure service is currently throttling requests."
+		imp := "Network and HTTPS transport are working. Service rate limits are active."
+		sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Valid\nAzure service   %s\n\nThe private connection is working. The service is currently throttling requests.\n\nWhat to do:\nCheck the application retry behavior and service limits.", destBlock, serviceLine)
+		return Evaluation{
+			Scenario:    ScenarioPrivateHTTPThrottled,
+			ExitCode:    0,
+			Title:       title,
+			Explanation: ex,
+			Impact:      imp,
+			Summary:     sum,
+			State:       state,
+			LikelyOwner: OwnerApplicationOrService,
+			NextAction:  "Check the application retry behavior and service limits.",
+		}
+
+	case HTTPCatServerError:
+		serviceLine := "Returned a server error"
+		ex := "The private connection is working. The Azure service or application returned an error."
+		imp := "Network and HTTPS transport are working. The upstream application or service encountered an error."
+		sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Valid\nAzure service   %s\n\nThe private connection is working. The Azure service or application returned an error.\n\nWhat to do:\nCheck the service health and application logs.", destBlock, serviceLine)
+		return Evaluation{
+			Scenario:    ScenarioPrivateHTTPServerError,
+			ExitCode:    0,
+			Title:       title,
+			Explanation: ex,
+			Impact:      imp,
+			Summary:     sum,
+			State:       state,
+			LikelyOwner: OwnerApplicationOrService,
+			NextAction:  "Check the service health and application logs.",
+		}
+
+	case HTTPCatRedirection:
+		serviceLine := "Returned a redirect"
+		ex := "The private connection is working. The service returned a redirect."
+		imp := "AZPE did not follow the redirect to maintain private path isolation."
+		sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Valid\nAzure service   %s\n\nAZPE did not follow the redirect.", destBlock, serviceLine)
+		return Evaluation{
+			Scenario:    ScenarioPrivateHTTPRedirect,
+			ExitCode:    0,
+			Title:       title,
+			Explanation: ex,
+			Impact:      imp,
+			Summary:     sum,
+			State:       state,
+			LikelyOwner: OwnerApplication,
+			NextAction:  "",
+		}
+
+	default:
+		serviceLine := fmt.Sprintf("HTTP %d %s", code, text)
+		ex := "The private connection is working. The Azure service returned an HTTP response."
+		imp := "End-to-end network and HTTPS transport are working."
+		sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Valid\nAzure service   %s\n\nThe private connection is working.", destBlock, serviceLine)
+		return Evaluation{
+			Scenario:    ScenarioPrivateHTTPResponded,
+			ExitCode:    0,
+			Title:       title,
+			Explanation: ex,
+			Impact:      imp,
+			Summary:     sum,
+			State:       state,
+			LikelyOwner: OwnerUnknown,
+			NextAction:  "",
+		}
+	}
+}
+
+func determineDominantHTTPResponse(results []MinimalHTTPResultItem) (HTTPResponseCategory, int, string, MinimalHTTPResultItem) {
+	if len(results) == 0 {
+		return HTTPCatNoResponse, 0, "", nil
+	}
+	r := results[0]
+	return r.GetResponseCategory(), r.GetStatusCode(), r.GetStatusText(), r
+}
+
+func determineDominantHTTPFailureStatus(results []MinimalHTTPResultItem) HTTPAddressStatus {
+	if len(results) == 0 {
+		return HTTPAddrError
+	}
+	counts := make(map[HTTPAddressStatus]int)
+	for _, r := range results {
+		counts[r.GetStatus()]++
+	}
+
+	prio := []HTTPAddressStatus{
+		HTTPAddrTimeout,
+		HTTPAddrMalformedResponse,
+		HTTPAddrTLSFailed,
+		HTTPAddrConnectionClosed,
+		HTTPAddrConnectionFailed,
+		HTTPAddrError,
+	}
+
+	for _, s := range prio {
+		if counts[s] > 0 {
+			return s
+		}
+	}
+
+	return results[0].GetStatus()
+}
+
 func determineDominantTLSStatus(results []MinimalTLSResultItem) TLSAddressStatus {
 	if len(results) == 0 {
 		return TLSAddrError
@@ -685,6 +990,25 @@ func formatShortTLSFailure(status TLSAddressStatus) string {
 		return "timed out"
 	case TLSAddrConnectionClosed:
 		return "connection closed"
+	default:
+		return "failed"
+	}
+}
+
+func formatShortHTTPFailure(status HTTPAddressStatus) string {
+	switch status {
+	case HTTPAddrTimeout:
+		return "response timed out"
+	case HTTPAddrConnectionFailed:
+		return "connection failed"
+	case HTTPAddrTLSFailed:
+		return "TLS failed"
+	case HTTPAddrMalformedResponse:
+		return "malformed HTTP"
+	case HTTPAddrConnectionClosed:
+		return "connection closed"
+	case HTTPAddrCanceled:
+		return "canceled"
 	default:
 		return "failed"
 	}

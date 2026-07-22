@@ -89,7 +89,7 @@ func renderDetailedTerminal(w io.Writer, res *model.Result, useColor bool) error
 	fmt.Fprintln(w, sectionHeader("Target"))
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "Original             %s\n", res.Target.OriginalInput)
-	fmt.Fprintf(w, "Normalized           %s://%s:%d%s\n", res.Target.Scheme, res.Target.Hostname, res.Target.Port, res.Target.RequestPath)
+	fmt.Fprintf(w, "Normalized           %s://%s:%d%s\n", res.Target.Scheme, res.Target.Hostname, res.Target.Port, target.RedactQueryValues(res.Target.RequestPath))
 	fmt.Fprintf(w, "Target type          %s\n", formatTargetType(res.Target.TargetType))
 	if res.Target.AzureServiceFamily != "" && res.Target.AzureServiceFamily != "NONE" {
 		fmt.Fprintf(w, "Azure service        %s\n", res.Target.AzureServiceFamily.DisplayName())
@@ -207,6 +207,55 @@ func renderDetailedTerminal(w io.Writer, res *model.Result, useColor bool) error
 		}
 	}
 
+	// Render HTTP details if performed
+	if res.HTTP.AggregateStatus != assess.AggregateHTTPNotAttempted && res.HTTP.AggregateStatus != assess.AggregateHTTPNotApplicable && res.HTTP.AggregateStatus != "" {
+		fmt.Fprintln(w, sectionHeader("HTTP"))
+		fmt.Fprintln(w)
+		fmt.Fprintf(w, "Status               %s\n", formatAggregateHTTPStatus(res.HTTP.AggregateStatus))
+		methodStr := res.HTTP.Method
+		if methodStr == "" {
+			methodStr = "GET"
+		}
+		fmt.Fprintf(w, "Method               %s\n", methodStr)
+		fmt.Fprintf(w, "Request path         %s\n", target.RedactQueryValues(res.HTTP.Path))
+		fmt.Fprintln(w, "Redirects            Not followed")
+		fmt.Fprintf(w, "Total duration       %s\n", formatDuration(res.HTTP.DurationMs))
+		fmt.Fprintln(w)
+
+		if len(res.HTTP.Results) > 0 {
+			fmt.Fprintln(w, "Results:")
+			for _, r := range res.HTTP.Results {
+				fmt.Fprintf(w, "  - %s\n", r.Destination)
+				fmt.Fprintf(w, "    Host             %s\n", r.Host)
+				if r.StatusCode > 0 {
+					fmt.Fprintf(w, "    Status           %d %s\n", r.StatusCode, r.StatusText)
+					fmt.Fprintf(w, "    Category         %s\n", formatHTTPResponseCategory(r.ResponseCategory))
+				} else {
+					fmt.Fprintf(w, "    Status           %s\n", formatHTTPAddressStatus(r.Status))
+				}
+				fmt.Fprintf(w, "    Duration         %s\n", formatDuration(r.DurationMs))
+				if r.Headers != nil {
+					if r.Headers.ContentType != "" {
+						fmt.Fprintf(w, "    Content type     %s\n", r.Headers.ContentType)
+					}
+					if r.Headers.RequestID != "" {
+						fmt.Fprintf(w, "    Request ID       %s\n", r.Headers.RequestID)
+					}
+					if r.Headers.Location != "" {
+						fmt.Fprintf(w, "    Location         %s\n", r.Headers.Location)
+					}
+				}
+				if r.ErrorCategory != "" {
+					fmt.Fprintf(w, "    Error category   %s\n", r.ErrorCategory)
+				}
+				if r.Error != "" {
+					fmt.Fprintf(w, "    Error            %s\n", r.Error)
+				}
+			}
+			fmt.Fprintln(w)
+		}
+	}
+
 	fmt.Fprintln(w, sectionHeader("Tests"))
 	fmt.Fprintln(w)
 	dnsTestStr := "Completed"
@@ -227,7 +276,11 @@ func renderDetailedTerminal(w io.Writer, res *model.Result, useColor bool) error
 	}
 	fmt.Fprintf(w, "TLS                  %s\n", tlsTestStr)
 
-	fmt.Fprintln(w, "HTTP                 Not performed")
+	httpTestStr := "Not performed"
+	if res.HTTP.AggregateStatus != assess.AggregateHTTPNotAttempted && res.HTTP.AggregateStatus != assess.AggregateHTTPNotApplicable && res.HTTP.AggregateStatus != "" {
+		httpTestStr = "Completed"
+	}
+	fmt.Fprintf(w, "HTTP                 %s\n", httpTestStr)
 	fmt.Fprintln(w)
 
 	if len(res.Warnings) > 0 {
@@ -270,13 +323,17 @@ func renderDetailedTerminal(w io.Writer, res *model.Result, useColor bool) error
 
 func getSymbolAndColor(scenario assess.AssessmentScenario) (string, string) {
 	switch scenario {
-	case assess.ScenarioPrivateDNSActive, assess.ScenarioPrivateTCPReachable, assess.ScenarioPrivateTLSValid:
+	case assess.ScenarioPrivateDNSActive, assess.ScenarioPrivateTCPReachable, assess.ScenarioPrivateTLSValid,
+		assess.ScenarioPrivateHTTPResponded, assess.ScenarioPrivateHTTPAuthRequired, assess.ScenarioPrivateHTTPAccessDenied,
+		assess.ScenarioPrivateHTTPNotFound, assess.ScenarioPrivateHTTPMethodNotAllowed, assess.ScenarioPrivateHTTPThrottled,
+		assess.ScenarioPrivateHTTPServerError, assess.ScenarioPrivateHTTPRedirect:
 		return "✓", colorGreen
 	case assess.ScenarioPrivateDNSNotActive, assess.ScenarioDNSLookupFailed, assess.ScenarioPrivateTCPUnreachable,
 		assess.ScenarioPrivateTLSFailed, assess.ScenarioPrivateTLSHostnameMismatch, assess.ScenarioPrivateTLSUntrusted,
-		assess.ScenarioPrivateTLSExpired, assess.ScenarioPrivateTLSTimeout:
+		assess.ScenarioPrivateTLSExpired, assess.ScenarioPrivateTLSTimeout, assess.ScenarioPrivateHTTPFailed,
+		assess.ScenarioPrivateHTTPTimeout, assess.ScenarioPrivateHTTPMalformed, assess.ScenarioPrivateHTTPTransportFailed:
 		return "✗", colorRed
-	case assess.ScenarioDNSMixed, assess.ScenarioSpecialOnly, assess.ScenarioPrivateTCPPartial, assess.ScenarioPrivateTLSPartial:
+	case assess.ScenarioDNSMixed, assess.ScenarioSpecialOnly, assess.ScenarioPrivateTCPPartial, assess.ScenarioPrivateTLSPartial, assess.ScenarioPrivateHTTPPartial:
 		return "⚠", colorYellow
 	default:
 		return "", ""
@@ -438,6 +495,77 @@ func formatTLSAddressStatus(status assess.TLSAddressStatus) string {
 		return "Error"
 	default:
 		return string(status)
+	}
+}
+
+func formatAggregateHTTPStatus(agg assess.AggregateHTTPStatus) string {
+	switch agg {
+	case assess.AggregateHTTPAllResponded:
+		return "Response received from all addresses"
+	case assess.AggregateHTTPNoneResponded:
+		return "No addresses returned an HTTP response"
+	case assess.AggregateHTTPPartiallyResponded:
+		return "Some addresses returned an HTTP response"
+	case assess.AggregateHTTPNotAttempted:
+		return "Not attempted"
+	case assess.AggregateHTTPNotApplicable:
+		return "Not applicable"
+	case assess.AggregateHTTPCanceled:
+		return "Canceled"
+	default:
+		return string(agg)
+	}
+}
+
+func formatHTTPAddressStatus(status assess.HTTPAddressStatus) string {
+	switch status {
+	case assess.HTTPAddrResponded:
+		return "Responded"
+	case assess.HTTPAddrTimeout:
+		return "Response timed out"
+	case assess.HTTPAddrConnectionFailed:
+		return "Connection failed"
+	case assess.HTTPAddrTLSFailed:
+		return "TLS failed"
+	case assess.HTTPAddrMalformedResponse:
+		return "Malformed HTTP"
+	case assess.HTTPAddrConnectionClosed:
+		return "Connection closed"
+	case assess.HTTPAddrCanceled:
+		return "Canceled"
+	case assess.HTTPAddrError:
+		return "Error"
+	default:
+		return string(status)
+	}
+}
+
+func formatHTTPResponseCategory(cat assess.HTTPResponseCategory) string {
+	switch cat {
+	case assess.HTTPCatSuccess:
+		return "Success"
+	case assess.HTTPCatAuthenticationRequired:
+		return "Authentication required"
+	case assess.HTTPCatAccessDenied:
+		return "Access denied"
+	case assess.HTTPCatNotFound:
+		return "Not found"
+	case assess.HTTPCatMethodNotAllowed:
+		return "Method not allowed"
+	case assess.HTTPCatConflict:
+		return "Conflict"
+	case assess.HTTPCatThrottled:
+		return "Throttled"
+	case assess.HTTPCatServerError:
+		return "Server error"
+	case assess.HTTPCatRedirection:
+		return "Redirection"
+	case assess.HTTPCatClientError:
+		return "Client error"
+	case assess.HTTPCatInformational:
+		return "Informational"
+	default:
+		return string(cat)
 	}
 }
 

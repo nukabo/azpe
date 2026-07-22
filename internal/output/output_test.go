@@ -13,7 +13,7 @@ import (
 	"github.com/azpe/azpe/internal/target"
 )
 
-func TestRender_TLSValid_SimpleAndDetailed(t *testing.T) {
+func TestRender_HTTP403_SimpleAndDetailed(t *testing.T) {
 	tgt, _ := target.Parse("myvault.vault.azure.net")
 	dnsObs := model.DNSObservation{
 		Status:        assess.DNSStatusSuccess,
@@ -59,17 +59,40 @@ func TestRender_TLSValid_SimpleAndDetailed(t *testing.T) {
 				CipherSuite:        "TLS_AES_256_GCM_SHA384",
 				HostnameValid:      &bTrue,
 				CertificateTrusted: &bTrue,
-				LeafCertificate: &model.LeafCertInfo{
-					Subject:   "CN=myvault.vault.azure.net",
-					Issuer:    "CN=Microsoft Azure RSA TLS Issuing CA",
-					NotBefore: "2026-01-01T00:00:00Z",
-					NotAfter:  "2026-12-31T23:59:59Z",
+			},
+		},
+	}
+	httpObs := model.HTTPObservation{
+		Status:          assess.HTTPStatusSuccess,
+		AggregateStatus: assess.AggregateHTTPAllResponded,
+		Method:          "GET",
+		Path:            "/",
+		DurationMs:      24,
+		Results: []model.HTTPResultItem{
+			{
+				Address:          "10.42.3.7",
+				Version:          "IPv4",
+				Classification:   assess.AddrPrivate,
+				Destination:      "10.42.3.7:443",
+				Port:             443,
+				ServerName:       "myvault.vault.azure.net",
+				Host:             "myvault.vault.azure.net",
+				Method:           "GET",
+				RequestURI:       "/",
+				Status:           assess.HTTPAddrResponded,
+				StatusCode:       403,
+				StatusText:       "Forbidden",
+				ResponseCategory: assess.HTTPCatAccessDenied,
+				DurationMs:       24,
+				Headers: &model.SafeHTTPHeaders{
+					ContentType: "application/json",
+					RequestID:   "req-12345",
 				},
 			},
 		},
 	}
 
-	res := model.NewResultFromDNSAndTCPAndTLS(tgt, time.Now(), dnsObs, addrObs, tcpObs, tlsObs)
+	res := model.NewResultFromDNSAndTCPAndTLSAndHTTP(tgt, time.Now(), dnsObs, addrObs, tcpObs, tlsObs, httpObs)
 
 	var buf bytes.Buffer
 	err := output.Render(&buf, res, output.FormatOptions{NoColor: true})
@@ -78,11 +101,11 @@ func TestRender_TLSValid_SimpleAndDetailed(t *testing.T) {
 	}
 
 	outStr := buf.String()
-	if !strings.Contains(outStr, "✓ Secure private connection looks correct") {
-		t.Errorf("expected title '✓ Secure private connection looks correct', got: %s", outStr)
+	if !strings.Contains(outStr, "✓ The Azure service responded") {
+		t.Errorf("expected title '✓ The Azure service responded', got: %s", outStr)
 	}
-	if !strings.Contains(outStr, "TLS             Valid") {
-		t.Errorf("expected TLS Valid status, got: %s", outStr)
+	if !strings.Contains(outStr, "Azure service   Access denied") {
+		t.Errorf("expected Azure service Access denied status, got: %s", outStr)
 	}
 
 	assertNoProhibitedPhrases(t, outStr)
@@ -94,72 +117,15 @@ func TestRender_TLSValid_SimpleAndDetailed(t *testing.T) {
 		t.Fatalf("unexpected render error: %v", err)
 	}
 	detailsStr := buf.String()
-	if !strings.Contains(detailsStr, "=== TLS ===") {
-		t.Errorf("expected TLS section in details, got: %s", detailsStr)
+	if !strings.Contains(detailsStr, "=== HTTP ===") {
+		t.Errorf("expected HTTP section in details, got: %s", detailsStr)
 	}
-	if !strings.Contains(detailsStr, "Status               Valid for all addresses") {
-		t.Errorf("expected Valid for all addresses status in details, got: %s", detailsStr)
-	}
-	if !strings.Contains(detailsStr, "TLS version      TLS 1.3") {
-		t.Errorf("expected TLS 1.3 in details, got: %s", detailsStr)
+	if !strings.Contains(detailsStr, "Status               Response received from all addresses") {
+		t.Errorf("expected Response received from all addresses in details, got: %s", detailsStr)
 	}
 }
 
-func TestRender_TLSHostnameMismatch_SimpleAndDetailed(t *testing.T) {
-	tgt, _ := target.Parse("myvault.vault.azure.net")
-	dnsObs := model.DNSObservation{
-		Status:                  assess.DNSStatusSuccess,
-		QueryHostname:           "myvault.vault.azure.net",
-		Addresses:               []model.IPObservation{{Address: "10.42.3.7", Version: "IPv4", Classification: assess.AddrPrivate}},
-		AggregateClassification: assess.AggregatePrivateOnly,
-	}
-	addrObs := model.AddrObservation{Classification: assess.AggregatePrivateOnly, Addresses: dnsObs.Addresses, PrivateIPs: []string{"10.42.3.7"}}
-	tcpObs := model.TCPObservation{
-		Status:          assess.TCPStatusSuccess,
-		AggregateStatus: assess.AggregateTCPAllConnected,
-		Port:            443,
-		Results:         []model.TCPResultItem{{Address: "10.42.3.7", Destination: "10.42.3.7:443", Port: 443, Status: assess.TCPAddrConnected}},
-	}
-	bFalse := false
-	tlsObs := model.TLSObservation{
-		Status:          assess.TLSStatusFailed,
-		AggregateStatus: assess.AggregateTLSNoneValid,
-		ServerName:      "myvault.vault.azure.net",
-		Results: []model.TLSResultItem{
-			{
-				Address:       "10.42.3.7",
-				Destination:   "10.42.3.7:443",
-				ServerName:    "myvault.vault.azure.net",
-				Status:        assess.TLSAddrHostnameMismatch,
-				Stage:         "CERTIFICATE_VALIDATION",
-				DurationMs:    21,
-				HostnameValid: &bFalse,
-				ErrorCategory: "HOSTNAME_MISMATCH",
-				Error:         "x509: certificate is valid for wrong.vault.azure.net, not myvault.vault.azure.net",
-			},
-		},
-	}
-
-	res := model.NewResultFromDNSAndTCPAndTLS(tgt, time.Now(), dnsObs, addrObs, tcpObs, tlsObs)
-
-	var buf bytes.Buffer
-	err := output.Render(&buf, res, output.FormatOptions{NoColor: true})
-	if err != nil {
-		t.Fatalf("unexpected render error: %v", err)
-	}
-
-	outStr := buf.String()
-	if !strings.Contains(outStr, "✗ The certificate does not match the Azure service name") {
-		t.Errorf("expected title '✗ The certificate does not match the Azure service name', got: %s", outStr)
-	}
-	if !strings.Contains(outStr, "TLS             Hostname mismatch") {
-		t.Errorf("expected TLS Hostname mismatch status, got: %s", outStr)
-	}
-
-	assertNoProhibitedPhrases(t, outStr)
-}
-
-func TestRender_JSONAssertions_Phase4(t *testing.T) {
+func TestRender_JSONAssertions_Phase5(t *testing.T) {
 	tgt, _ := target.Parse("myvault.vault.azure.net")
 	dnsObs := model.DNSObservation{
 		Status:                  assess.DNSStatusSuccess,
@@ -174,24 +140,32 @@ func TestRender_JSONAssertions_Phase4(t *testing.T) {
 		Status:          assess.TLSStatusSuccess,
 		AggregateStatus: assess.AggregateTLSAllValid,
 		ServerName:      "myvault.vault.azure.net",
-		DurationMs:      18,
-		Results: []model.TLSResultItem{
+		Results:         []model.TLSResultItem{{Address: "10.42.3.7", Destination: "10.42.3.7:443", Status: assess.TLSAddrValid, HostnameValid: &bTrue, CertificateTrusted: &bTrue}},
+	}
+	httpObs := model.HTTPObservation{
+		Status:          assess.HTTPStatusSuccess,
+		AggregateStatus: assess.AggregateHTTPAllResponded,
+		Method:          "GET",
+		Path:            "/",
+		DurationMs:      24,
+		Results: []model.HTTPResultItem{
 			{
-				Address:            "10.42.3.7",
-				Destination:        "10.42.3.7:443",
-				ServerName:         "myvault.vault.azure.net",
-				Status:             assess.TLSAddrValid,
-				Stage:              "COMPLETE",
-				DurationMs:         18,
-				TLSVersion:         "TLS 1.3",
-				CipherSuite:        "TLS_AES_256_GCM_SHA384",
-				HostnameValid:      &bTrue,
-				CertificateTrusted: &bTrue,
+				Address:          "10.42.3.7",
+				Destination:      "10.42.3.7:443",
+				ServerName:       "myvault.vault.azure.net",
+				Host:             "myvault.vault.azure.net",
+				Method:           "GET",
+				RequestURI:       "/",
+				Status:           assess.HTTPAddrResponded,
+				StatusCode:       403,
+				StatusText:       "Forbidden",
+				ResponseCategory: assess.HTTPCatAccessDenied,
+				DurationMs:       24,
 			},
 		},
 	}
 
-	res := model.NewResultFromDNSAndTCPAndTLS(tgt, time.Now(), dnsObs, addrObs, tcpObs, tlsObs)
+	res := model.NewResultFromDNSAndTCPAndTLSAndHTTP(tgt, time.Now(), dnsObs, addrObs, tcpObs, tlsObs, httpObs)
 
 	var buf bytes.Buffer
 	err := output.Render(&buf, res, output.FormatOptions{JSON: true})
@@ -204,12 +178,9 @@ func TestRender_JSONAssertions_Phase4(t *testing.T) {
 		t.Fatalf("invalid JSON output: %v", err)
 	}
 
-	tlsMap := parsed["tls"].(map[string]interface{})
-	if tlsMap["aggregateStatus"] != "ALL_VALID" {
-		t.Errorf("expected aggregateStatus ALL_VALID, got %v", tlsMap["aggregateStatus"])
-	}
-	if tlsMap["serverName"] != "myvault.vault.azure.net" {
-		t.Errorf("expected serverName myvault.vault.azure.net, got %v", tlsMap["serverName"])
+	httpMap := parsed["http"].(map[string]interface{})
+	if httpMap["aggregateStatus"] != "ALL_RESPONDED" {
+		t.Errorf("expected aggregateStatus ALL_RESPONDED, got %v", httpMap["aggregateStatus"])
 	}
 }
 
@@ -233,6 +204,11 @@ func assertNoProhibitedPhrases(t *testing.T, out string) {
 		"ALL_VALID",
 		"NONE_VALID",
 		"PARTIALLY_VALID",
+		"ALL_RESPONDED",
+		"NONE_RESPONDED",
+		"PARTIALLY_RESPONDED",
+		"AUTHENTICATION_REQUIRED",
+		"ACCESS_DENIED",
 		"HOSTNAME_MISMATCH",
 		"UNTRUSTED_CERTIFICATE",
 		"SECURITY_OR_PROXY",

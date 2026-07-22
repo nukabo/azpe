@@ -10,6 +10,7 @@ import (
 
 	"github.com/azpe/azpe/internal/assess"
 	"github.com/azpe/azpe/internal/cli"
+	"github.com/azpe/azpe/internal/http"
 	"github.com/azpe/azpe/internal/model"
 	"github.com/azpe/azpe/internal/tcp"
 	"github.com/azpe/azpe/internal/tls"
@@ -33,13 +34,14 @@ func (f *FakeResolver) LookupNetIP(ctx context.Context, network, host string) ([
 func TestCLIRoutingWithFakeResolverAndProbers(t *testing.T) {
 	fakeResolver := &FakeResolver{
 		Addrs: map[string][]netip.Addr{
-			"private.vault.azure.net": {netip.MustParseAddr("10.0.0.1")},
-			"multi.vault.azure.net":   {netip.MustParseAddr("10.0.0.1"), netip.MustParseAddr("10.0.0.2")},
-			"failed.vault.azure.net":  {netip.MustParseAddr("10.0.0.3")},
-			"tlsfail.vault.azure.net": {netip.MustParseAddr("10.0.0.4")},
-			"public.vault.azure.net":  {netip.MustParseAddr("20.42.64.44")},
-			"mixed.vault.azure.net":   {netip.MustParseAddr("10.0.0.1"), netip.MustParseAddr("20.42.64.44")},
-			"microsoft.com":           {netip.MustParseAddr("150.171.109.193")},
+			"private.vault.azure.net":  {netip.MustParseAddr("10.0.0.1")},
+			"multi.vault.azure.net":    {netip.MustParseAddr("10.0.0.1"), netip.MustParseAddr("10.0.0.2")},
+			"failed.vault.azure.net":   {netip.MustParseAddr("10.0.0.3")},
+			"tlsfail.vault.azure.net":  {netip.MustParseAddr("10.0.0.4")},
+			"httpfail.vault.azure.net": {netip.MustParseAddr("10.0.0.5")},
+			"public.vault.azure.net":   {netip.MustParseAddr("20.42.64.44")},
+			"mixed.vault.azure.net":    {netip.MustParseAddr("10.0.0.1"), netip.MustParseAddr("20.42.64.44")},
+			"microsoft.com":            {netip.MustParseAddr("150.171.109.193")},
 		},
 		Err: map[string]error{
 			"nonexistent.vault.azure.net": &net.DNSError{Err: "no such host", Name: "nonexistent.vault.azure.net", IsNotFound: true},
@@ -52,6 +54,7 @@ func TestCLIRoutingWithFakeResolverAndProbers(t *testing.T) {
 			"10.0.0.2": {Address: "10.0.0.2", Destination: "10.0.0.2:443", Status: assess.TCPAddrConnected, DurationMs: 12},
 			"10.0.0.3": {Address: "10.0.0.3", Destination: "10.0.0.3:443", Status: assess.TCPAddrTimedOut, DurationMs: 5001, ErrorCategory: "TIMEOUT"},
 			"10.0.0.4": {Address: "10.0.0.4", Destination: "10.0.0.4:443", Status: assess.TCPAddrConnected, DurationMs: 6},
+			"10.0.0.5": {Address: "10.0.0.5", Destination: "10.0.0.5:443", Status: assess.TCPAddrConnected, DurationMs: 6},
 		},
 	}
 
@@ -82,6 +85,47 @@ func TestCLIRoutingWithFakeResolverAndProbers(t *testing.T) {
 				ErrorCategory: "HOSTNAME_MISMATCH",
 				Error:         "x509: certificate is valid for wrong.vault.azure.net, not tlsfail.vault.azure.net",
 			},
+			"10.0.0.5": {
+				Address:            "10.0.0.5",
+				Destination:        "10.0.0.5:443",
+				Status:             assess.TLSAddrValid,
+				DurationMs:         15,
+				HostnameValid:      &bTrue,
+				CertificateTrusted: &bTrue,
+			},
+		},
+	}
+
+	fakeHTTPProber := &http.FakeProber{
+		Responses: map[string]model.HTTPResultItem{
+			"10.0.0.1": {
+				Address:          "10.0.0.1",
+				Destination:      "10.0.0.1:443",
+				Status:           assess.HTTPAddrResponded,
+				StatusCode:       403,
+				StatusText:       "Forbidden",
+				ResponseCategory: assess.HTTPCatAccessDenied,
+				DurationMs:       24,
+			},
+			"10.0.0.2": {
+				Address:          "10.0.0.2",
+				Destination:      "10.0.0.2:443",
+				Status:           assess.HTTPAddrResponded,
+				StatusCode:       403,
+				StatusText:       "Forbidden",
+				ResponseCategory: assess.HTTPCatAccessDenied,
+				DurationMs:       28,
+			},
+			"10.0.0.5": {
+				Address:          "10.0.0.5",
+				Destination:      "10.0.0.5:443",
+				Status:           assess.HTTPAddrTimeout,
+				ResponseCategory: assess.HTTPCatNoResponse,
+				DurationMs:       5000,
+				FailureStage:     "RESPONSE",
+				ErrorCategory:    "TIMEOUT",
+				Error:            "context deadline exceeded",
+			},
 		},
 	}
 
@@ -105,16 +149,16 @@ func TestCLIRoutingWithFakeResolverAndProbers(t *testing.T) {
 			wantStdout: "AZPE version",
 		},
 		{
-			name:       "recognized Azure private target single IP TLS success exit 0",
+			name:       "recognized Azure private target HTTP 403 exit 0",
 			args:       []string{"probe", "private.vault.azure.net", "--no-color"},
 			wantExit:   cli.ExitSuccess,
-			wantStdout: "✓ Secure private connection looks correct",
+			wantStdout: "✓ The Azure service responded",
 		},
 		{
-			name:       "recognized Azure private target multi IP TLS success exit 0",
-			args:       []string{"probe", "multi.vault.azure.net", "--no-color"},
+			name:       "recognized Azure private target --no-http exit 0",
+			args:       []string{"probe", "private.vault.azure.net", "--no-http", "--no-color"},
 			wantExit:   cli.ExitSuccess,
-			wantStdout: "✓ Secure private connections look correct",
+			wantStdout: "✓ Secure private connection looks correct",
 		},
 		{
 			name:       "recognized Azure private target TCP failure exit 5",
@@ -127,6 +171,12 @@ func TestCLIRoutingWithFakeResolverAndProbers(t *testing.T) {
 			args:       []string{"probe", "tlsfail.vault.azure.net", "--no-color"},
 			wantExit:   cli.ExitTLSFailure,
 			wantStdout: "✗ The certificate does not match the Azure service name",
+		},
+		{
+			name:       "recognized Azure private target HTTP timeout exit 7 (ExitHTTPFailure)",
+			args:       []string{"probe", "httpfail.vault.azure.net", "--no-color"},
+			wantExit:   cli.ExitHTTPFailure,
+			wantStdout: "✗ The Azure service did not respond in time",
 		},
 		{
 			name:       "recognized Azure public target exit 4 (ExitNotPrivate)",
@@ -156,14 +206,14 @@ func TestCLIRoutingWithFakeResolverAndProbers(t *testing.T) {
 			name:       "probe details output",
 			args:       []string{"probe", "private.vault.azure.net", "--details", "--no-color"},
 			wantExit:   cli.ExitSuccess,
-			wantStdout: "=== TLS ===",
+			wantStdout: "=== HTTP ===",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
-			exitCode := cli.RunWithResolverProberAndTLSProber(tt.args, &stdout, &stderr, fakeResolver, fakeProber, fakeTLSProber)
+			exitCode := cli.RunWithResolverProberTLSProberAndHTTPProber(tt.args, &stdout, &stderr, fakeResolver, fakeProber, fakeTLSProber, fakeHTTPProber)
 
 			if exitCode != tt.wantExit {
 				t.Errorf("cli.Run(%v) exit code = %d, want %d. Stderr: %s", tt.args, exitCode, tt.wantExit, stderr.String())
@@ -175,5 +225,31 @@ func TestCLIRoutingWithFakeResolverAndProbers(t *testing.T) {
 				t.Errorf("stderr = %q, expected substring %q", stderr.String(), tt.wantStderr)
 			}
 		})
+	}
+}
+
+func TestCLI_NoCustomTrustStoreOrBypassFlags(t *testing.T) {
+	bannedFlags := []string{
+		"--ca-cert",
+		"--ca-file",
+		"--custom-ca",
+		"--root-ca",
+		"--trust-store",
+		"--insecure",
+		"--skip-verify",
+		"--tls-skip-verify",
+	}
+
+	var stdout, stderr bytes.Buffer
+	exitCode := cli.Run([]string{"--help"}, &stdout, &stderr)
+	if exitCode != cli.ExitSuccess {
+		t.Fatalf("help command failed with exit %d", exitCode)
+	}
+
+	helpOutput := stdout.String()
+	for _, flag := range bannedFlags {
+		if strings.Contains(helpOutput, flag) {
+			t.Errorf("SECURITY/DESIGN VIOLATION: CLI help text exposes custom trust store or bypass flag %s", flag)
+		}
 	}
 }
