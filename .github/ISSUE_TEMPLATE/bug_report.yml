@@ -1,0 +1,48 @@
+name: Bug report
+description: Create a report to help us improve AZPE
+title: '[BUG]: '
+labels: ['bug']
+assignees: ''
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug! Please ensure you do not include sensitive credentials, Azure subscription IDs, or private keys in your issue description.
+
+  - type: input
+    id: target
+    attributes:
+      label: Target Azure Hostname or URL
+      description: What target hostname or URL were you probing? (e.g. myvault.vault.azure.net)
+      placeholder: myvault.vault.azure.net
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Execution Environment
+      description: Where was AZPE executed? (e.g., Linux VM, AKS Pod, Azure App Service, macOS, Windows PowerShell)
+      placeholder: |
+        OS: Linux / AKS Pod
+        AZPE Version: azpe v0.1.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: command-output
+    attributes:
+      label: Command Output
+      description: Provide the terminal output or JSON output (use `azpe probe <target> --details --no-color`).
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: A clear and concise description of what you expected to happen.
+    validations:
+      required: true

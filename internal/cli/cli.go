@@ -107,7 +107,7 @@ EXAMPLES:
 }
 
 func printVersion(w io.Writer) {
-	fmt.Fprintf(w, "AZPE version %s (JSON schema v%d)\n", version.Version, version.SchemaVersion)
+	fmt.Fprintln(w, version.String())
 }
 
 func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver, prober tcp.Prober, tlsProber tls.Prober, httpProber http.Prober) int {

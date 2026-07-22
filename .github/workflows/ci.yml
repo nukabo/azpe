@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Go
+        uses: actions/setup-go@f111f37a573bc1f95242881341a470219a7745b4 # v5.3.0
+        with:
+          go-version: '1.22'
+          check-latest: false
+          cache: true
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Validate code formatting (gofmt)
+        run: |
+          UNFORMATTED=$(gofmt -l cmd internal)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "The following files are not formatted with gofmt:"
+            echo "$UNFORMATTED"
+            exit 1
+          fi
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run unit & integration tests
+        run: go test -v -count=1 ./...
+
+      - name: Run race detector
+        run: go test -v -race ./...
+
+      - name: Build binary
+        run: go build -v -o azpe ./cmd/azpe
+
+      - name: Test binary version & help
+        run: |
+          ./azpe --version
+          ./azpe --help
+
+      - name: Run GoReleaser check
+        uses: goreleaser/goreleaser-action@286f3bfee21b65c32d51208736adc61e368be897 # v6.0.0
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: check
+
+      - name: Run GoReleaser snapshot build
+        uses: goreleaser/goreleaser-action@286f3bfee21b65c32d51208736adc61e368be897 # v6.0.0
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --snapshot --clean

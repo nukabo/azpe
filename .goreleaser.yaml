@@ -1,0 +1,65 @@
+version: 2
+
+project_name: azpe
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: azpe
+    main: ./cmd/azpe
+    binary: azpe
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/azpe/azpe/internal/version.Version={{.Version}}
+      - -X github.com/azpe/azpe/internal/version.Commit={{.FullCommit}}
+      - -X github.com/azpe/azpe/internal/version.Date={{.Date}}
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    name_template: "azpe_{{.Version}}_{{.Os}}_{{.Arch}}"
+    files:
+      - LICENSE
+      - README.md
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "merge"
+
+release:
+  github:
+    owner: nukabo
+    name: azpe
+  prerelease: auto
+  mode: keep-existing

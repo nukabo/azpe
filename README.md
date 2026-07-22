@@ -1,12 +1,42 @@
 # AZPE (Azure Private Endpoint Connectivity Diagnostic Utility)
 
-`azpe` is a small, portable, zero-runtime command-line utility for diagnosing Azure Private Endpoint connectivity directly from a workload's actual execution environment (e.g. application container, pod, VM, serverless instance).
+[![CI](https://github.com/nukabo/azpe/actions/workflows/ci.yml/badge.svg)](https://github.com/nukabo/azpe/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/nukabo/azpe)](https://goreportcard.com/report/github.com/nukabo/azpe)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-## Primary Command
+`azpe` is a small, portable, zero-login, single-binary command-line utility for diagnosing Azure Private Endpoint connectivity directly from a workload's actual execution environment (e.g. application container, pod, VM, serverless instance).
+
+---
+
+## Quick Start
 
 ```bash
+# 1. Download and run directly (no installation or Azure login required)
 azpe probe myvault.vault.azure.net
 ```
+
+### Example Terminal Output
+
+```text
+AZPE
+
+✓ The Azure service responded
+
+myvault.vault.azure.net → 10.42.3.7:443
+HTTP 403 Forbidden
+
+Private DNS     Looks correct
+Connection      Working
+TLS             Valid
+Azure service   Access denied
+
+The private connection is working. The service denied this unauthenticated request.
+
+What to do:
+If the application still fails, check its identity and Azure permissions.
+```
+
+---
 
 ## The Problem
 
@@ -28,15 +58,113 @@ When an application cannot reach an Azure service, engineers commonly cannot dis
 
 `azpe` combines DNS resolution, IP classification, TCP connectivity, TLS validation, and a minimal HTTP health probe into a single plain-language diagnostic assessment.
 
-## Target User
+> **Key Diagnostic Fact**: An `HTTP 403 Forbidden` or `HTTP 401 Unauthorized` response means **the private connection and HTTPS transport work perfectly**. The issue is purely application identity, credentials, or RBAC roles.
+
+---
+
+## Target User & Requirements
 
 - Application Engineers & DevOps Practitioners
 - Cloud Reliability Engineers
 - Enterprise Network & Security Operations Teams
 
-`azpe` requires **zero Azure permissions**, **no Azure CLI**, **no Azure SDK**, and **no Go runtime** on the target host.
+**Zero Prerequisites**: Ordinary users do **not** need Go, Python, Node.js, .NET, Docker, Azure CLI, Azure login, or administrator privileges.
 
-## Critical Product Semantics & Security Policy
+---
+
+## Installation
+
+### Primary Installation Model (Standalone Binary)
+
+1. Download the latest release archive for your operating system and architecture from [GitHub Releases](https://github.com/nukabo/azpe/releases):
+
+| Platform | Target Archive |
+| -------- | -------------- |
+| **Linux (AMD64)** | `azpe_0.1.0_linux_amd64.tar.gz` |
+| **Linux (ARM64)** | `azpe_0.1.0_linux_arm64.tar.gz` |
+| **Windows (AMD64)** | `azpe_0.1.0_windows_amd64.zip` |
+| **macOS (Intel AMD64)** | `azpe_0.1.0_darwin_amd64.tar.gz` |
+| **macOS (Apple Silicon ARM64)** | `azpe_0.1.0_darwin_arm64.tar.gz` |
+
+2. Extract the single executable file (`azpe` on Linux/macOS, `azpe.exe` on Windows).
+
+3. Place the executable on your system `PATH` (e.g. `/usr/local/bin` or `%Path%`), or run it directly from your terminal.
+
+```bash
+# Linux / macOS
+tar -xzf azpe_0.1.0_linux_amd64.tar.gz
+sudo mv azpe /usr/local/bin/
+
+# Test execution
+azpe probe myvault.vault.azure.net
+```
+
+---
+
+## Verifying Release Artifacts
+
+### 1. SHA-256 Checksum Verification
+
+Every release includes a signed `checksums.txt` file. Verify downloaded archives before extraction:
+
+**Linux / macOS**:
+```bash
+sha256sum --check checksums.txt
+# Or macOS shasum:
+shasum -a 256 -c checksums.txt
+```
+
+**Windows (PowerShell)**:
+```powershell
+Get-FileHash .\azpe_0.1.0_windows_amd64.zip -Algorithm SHA256
+```
+Compare the resulting hash with the corresponding value in `checksums.txt`.
+
+### 2. GitHub Artifact Provenance Attestations
+
+AZPE releases publish GitHub OIDC build provenance attestations. Verify that binaries were built by official GitHub Actions workflows:
+
+```bash
+gh attestation verify azpe_0.1.0_linux_amd64.tar.gz --repo nukabo/azpe
+```
+
+---
+
+## Container Image Usage (GHCR)
+
+AZPE is published as a minimal, non-root container image to GitHub Container Registry:
+
+```bash
+# Run probe inside container
+docker run --rm ghcr.io/nukabo/azpe:0.1.0 probe myvault.vault.azure.net
+
+# Run latest stable release
+docker run --rm ghcr.io/nukabo/azpe:latest probe myvault.vault.azure.net
+```
+
+The container image runs as a non-root user (`nobody:65534`), includes standard system CA certificates for TLS validation, contains no shell or package manager, and has entrypoint `/azpe`.
+
+---
+
+## Upgrade & Uninstall
+
+### Upgrading AZPE
+To upgrade AZPE, download the newest release archive from [GitHub Releases](https://github.com/nukabo/azpe/releases) and replace the existing `azpe` / `azpe.exe` binary file.
+
+### Uninstalling AZPE
+To completely uninstall AZPE, delete the `azpe` / `azpe.exe` binary file from your system:
+
+```bash
+# Linux / macOS
+sudo rm /usr/local/bin/azpe
+
+# Windows (PowerShell)
+Remove-Item C:\Path\To\azpe.exe
+```
+
+---
+
+## Critical Security Policies & Disclaimers
 
 > [!IMPORTANT]
 > **No Control-Plane Claims**: AZPE observes connectivity from the workload's current execution environment without Azure control-plane access.
@@ -51,74 +179,53 @@ When an application cannot reach an Azure service, engineers commonly cannot dis
 > [!WARNING]
 > **Target URL Recommendation**: Avoid placing secrets, tokens, or credentials directly in the target URL. AZPE redacts query parameter values in all terminal and JSON output (e.g. `/path?sig=REDACTED`), but the raw query parameter values are still sent over the network to the target service as part of the requested HTTP URL.
 
-## Current Status (Phase 5)
+---
 
-Phase 5 implements:
-- Operating-system DNS resolution using Go's standard library resolver.
-- Azure service hostname recognition catalogue (Key Vault, Storage, SQL, Cosmos DB, AI Search, OpenAI, ACR, App Configuration, Service Bus).
-- IP address classification across 10 categories (`PRIVATE`, `PUBLIC`, `LOOPBACK`, `LINK_LOCAL`, `UNSPECIFIED`, `MULTICAST`, `DOCUMENTATION`, `BENCHMARK`, `RESERVED`, `UNKNOWN`).
-- Direct TCP connectivity probing (`net.Dialer.DialContext`) directly against captured IP addresses and target ports without secondary DNS lookups.
-- Direct TLS validation (`crypto/tls`) against captured private IPs using original Azure service hostname for SNI and system trust store certificate verification.
-- Minimal unauthenticated HTTPS GET probing against TLS-valid private IP addresses.
-- Direct-IP HTTPS transport ignoring environment proxies (`HTTP_PROXY`, etc.) and redirect prevention.
-- Bounded response body reading (4 KiB max) and safe response-header allowlisting (`Content-Type`, `Date`, `Server`, `Location`, `Retry-After`, `WWW-Authenticate`, request IDs).
-- Universal query parameter value redaction (e.g. `/path?sig=REDACTED`) across simple, detailed, and JSON outputs.
-- Plain-language diagnostic assessments and exit code contracts:
-  - Exit `0`: Recognized Azure service, private DNS active, TCP connected, TLS valid, and HTTP response received (2xx, 3xx, 4xx, 429, 5xx) or `--no-http` specified (`✓ The Azure service responded`).
-  - Exit `2`: Invalid CLI usage or target syntax error.
-  - Exit `3`: DNS lookup failed for a recognized Azure service hostname (`✗ The Azure service name cannot be resolved`).
-  - Exit `4`: Recognized Azure service hostname resolved exclusively to public addresses (`✗ This workload is not using private DNS`).
-  - Exit `5`: Recognized Azure service hostname resolved privately, but ALL TCP connection probes failed (`✗ The private address cannot be reached`).
-  - Exit `6`: Recognized Azure service hostname resolved privately, TCP succeeded, but ALL TLS validations failed (`✗ The certificate does not match the Azure service name`, `✗ The certificate is not trusted by this workload`, `✗ The certificate has expired`).
-  - Exit `7`: DNS, TCP, and TLS succeeded, but NO valid HTTP response was received before timeout / transport error (`✗ The Azure service did not respond in time`).
-  - Exit `8`: Inconclusive / Partial (mixed DNS, partial TCP reachability, partial TLS validity, partial HTTP response, special-purpose IPs, IP literal, unrecognized non-Azure target).
-  - Exit `10`: Unexpected internal error.
+## Usage Guide & Command Options
 
-## Completed v0.1 Roadmap
+```bash
+azpe probe <azure-service-hostname-or-url> [flags]
+```
 
-- [x] Target parsing, result modeling, CLI routing, JSON & terminal rendering (Phase 1)
-- [x] Operating-system DNS resolution, target recognition & IP address classification (Phase 2)
-- [x] Direct TCP connectivity probing & per-address latency measurement (Phase 3)
-- [x] Direct TLS validation, SNI & system trust store certificate verification (Phase 4)
-- [x] Minimal unauthenticated HTTPS GET probe & HTTP status code classification (Phase 5)
+### Flags
 
-## Building from Source
+| Flag | Description |
+| ---- | ----------- |
+| `--json` | Output machine-readable JSON (`schemaVersion: 1`) |
+| `--details` | Multi-section terminal output (Target, DNS, Connection, TLS, HTTP, Tests, Assessment) |
+| `--timeout <duration>` | Operation deadline timeout (default: `5s`) |
+| `--no-http` | Skip minimal HTTP probe phase and return Phase 4 TLS results |
+| `--no-color` | Disable ANSI colorized terminal output |
+
+---
+
+## Building & Contributing (For Maintainers & Developers)
 
 ### Prerequisites
 - Go 1.22 or higher
+- Git
 
-### Build
+### Local Build & Test
 
 ```bash
+# Clone repository
+git clone https://github.com/nukabo/azpe.git
+cd azpe
+
+# Build host binary
 go build -o azpe ./cmd/azpe
-```
 
-### Run Tests
-
-```bash
-go test -v ./...
+# Run test suite
+go test -v -count=1 ./...
 go vet ./...
-go test -race ./...
+go test -v -race ./...
+
+# Validate GoReleaser v2 configuration locally
+goreleaser check
+goreleaser release --snapshot --clean
 ```
 
-### Cross-Compilation
-
-```bash
-# Linux AMD64
-GOOS=linux GOARCH=amd64 go build -o dist/azpe-linux-amd64 ./cmd/azpe
-
-# Linux ARM64
-GOOS=linux GOARCH=arm64 go build -o dist/azpe-linux-arm64 ./cmd/azpe
-
-# Windows AMD64
-GOOS=windows GOARCH=amd64 go build -o dist/azpe-windows-amd64.exe ./cmd/azpe
-
-# macOS AMD64
-GOOS=darwin GOARCH=amd64 go build -o dist/azpe-darwin-amd64 ./cmd/azpe
-
-# macOS ARM64
-GOOS=darwin GOARCH=arm64 go build -o dist/azpe-darwin-arm64 ./cmd/azpe
-```
+---
 
 ## License
 

@@ -146,7 +146,7 @@ func TestCLIRoutingWithFakeResolverAndProbers(t *testing.T) {
 			name:       "flag --version",
 			args:       []string{"--version"},
 			wantExit:   cli.ExitSuccess,
-			wantStdout: "AZPE version",
+			wantStdout: "AZPE v0.1.0-dev",
 		},
 		{
 			name:       "recognized Azure private target HTTP 403 exit 0",
