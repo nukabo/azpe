@@ -24,6 +24,15 @@ const (
 	ScenarioPrivateTCPReachable   AssessmentScenario = "PRIVATE_TCP_REACHABLE"
 	ScenarioPrivateTCPUnreachable AssessmentScenario = "PRIVATE_TCP_UNREACHABLE"
 	ScenarioPrivateTCPPartial     AssessmentScenario = "PRIVATE_TCP_PARTIAL"
+
+	// Phase 4 TLS Scenarios
+	ScenarioPrivateTLSValid            AssessmentScenario = "PRIVATE_TLS_VALID"
+	ScenarioPrivateTLSFailed           AssessmentScenario = "PRIVATE_TLS_FAILED"
+	ScenarioPrivateTLSPartial          AssessmentScenario = "PRIVATE_TLS_PARTIAL"
+	ScenarioPrivateTLSHostnameMismatch AssessmentScenario = "PRIVATE_TLS_HOSTNAME_MISMATCH"
+	ScenarioPrivateTLSUntrusted        AssessmentScenario = "PRIVATE_TLS_UNTRUSTED"
+	ScenarioPrivateTLSExpired          AssessmentScenario = "PRIVATE_TLS_EXPIRED"
+	ScenarioPrivateTLSTimeout          AssessmentScenario = "PRIVATE_TLS_TIMEOUT"
 )
 
 // Evaluation represents the structured outcome of the assessment decision engine.
@@ -57,8 +66,30 @@ type MinimalTCPResultItem interface {
 	GetError() string
 }
 
-// Evaluate determines the Assessment result and UX scenario from target, DNS, and TCP observations.
-func Evaluate(tgt *target.Target, dnsStatus DNSStatus, aggClass AggregateClassification, addresses []string, classifications []AddressClassification, errCat, errMsg string, tcpObs MinimalTCPObservation) Evaluation {
+// MinimalTLSObservation contains fields required for Evaluation without importing model package.
+type MinimalTLSObservation interface {
+	GetAggregateStatus() AggregateTLSStatus
+	GetServerName() string
+	GetResults() []MinimalTLSResultItem
+}
+
+// MinimalTLSResultItem interface for per-address TLS result details.
+type MinimalTLSResultItem interface {
+	GetAddress() string
+	GetDestination() string
+	GetPort() int
+	GetServerName() string
+	GetStatus() TLSAddressStatus
+	GetStage() string
+	GetDurationMs() int64
+	GetTLSVersion() string
+	GetCipherSuite() string
+	GetErrorCategory() string
+	GetError() string
+}
+
+// Evaluate determines the Assessment result and UX scenario from target, DNS, TCP, and TLS observations.
+func Evaluate(tgt *target.Target, dnsStatus DNSStatus, aggClass AggregateClassification, addresses []string, classifications []AddressClassification, errCat, errMsg string, tcpObs MinimalTCPObservation, tlsObs MinimalTLSObservation) Evaluation {
 	// 1. IP Literal Target
 	if tgt.TargetType == target.TargetTypeIPLiteral {
 		ex := "An IP address was provided instead of an Azure service hostname."
@@ -138,10 +169,190 @@ func Evaluate(tgt *target.Target, dnsStatus DNSStatus, aggClass AggregateClassif
 
 	switch aggClass {
 	case AggregatePrivateOnly:
-		// Check TCP Probing Results for Private-Only DNS
+		// Evaluate TCP and TLS Probing Results for Private-Only DNS
 		if tcpObs != nil && tcpObs.GetAggregateStatus() != AggregateTCPNotAttempted && tcpObs.GetAggregateStatus() != AggregateTCPNotApplicable {
 			switch tcpObs.GetAggregateStatus() {
 			case AggregateTCPAllConnected:
+				// Evaluate Phase 4 TLS Probing
+				if tlsObs != nil && tlsObs.GetAggregateStatus() != AggregateTLSNotAttempted && tlsObs.GetAggregateStatus() != AggregateTLSNotApplicable {
+					switch tlsObs.GetAggregateStatus() {
+					case AggregateTLSAllValid:
+						title := "Secure private connection looks correct"
+						if len(tlsObs.GetResults()) > 1 {
+							title = "Secure private connections look correct"
+						}
+						var lines []string
+						for _, r := range tlsObs.GetResults() {
+							if len(tlsObs.GetResults()) == 1 {
+								lines = append(lines, fmt.Sprintf("%s → %s", tgt.Hostname, r.GetDestination()))
+							} else {
+								lines = append(lines, fmt.Sprintf("%-18s TLS valid", r.GetDestination()))
+							}
+						}
+						destBlock := strings.Join(lines, "\n")
+						connStatusStr := "Working"
+						tlsStatusStr := "Valid"
+						if len(tlsObs.GetResults()) > 1 {
+							connStatusStr = "Working for all addresses"
+							tlsStatusStr = "Valid for all addresses"
+						}
+						ex := "The Azure service hostname resolved privately, and this workload established a valid, trusted TLS connection to every private address."
+						imp := "DNS, TCP, and TLS validation look correct. Service response and application authorization remain untested."
+						sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      %s\nTLS             %s\n\nService response and application access not tested yet.", destBlock, connStatusStr, tlsStatusStr)
+						return Evaluation{
+							Scenario:    ScenarioPrivateTLSValid,
+							ExitCode:    0,
+							Title:       title,
+							Explanation: ex,
+							Impact:      imp,
+							Summary:     sum,
+							State:       AssessmentWorking,
+							LikelyOwner: OwnerUnknown,
+							NextAction:  "",
+						}
+
+					case AggregateTLSNoneValid:
+						domStatus := determineDominantTLSStatus(tlsObs.GetResults())
+						switch domStatus {
+						case TLSAddrHostnameMismatch:
+							title := "The certificate does not match the Azure service name"
+							var lines []string
+							for _, r := range tlsObs.GetResults() {
+								lines = append(lines, fmt.Sprintf("%s → %s", tgt.Hostname, r.GetDestination()))
+							}
+							destBlock := strings.Join(lines, "\n")
+							ex := "The private address is reachable, but it presented a certificate for a different hostname."
+							imp := "The application cannot establish a secure connection because certificate hostname validation failed."
+							sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Hostname mismatch\n\nThe address is reachable, but it presented a certificate for a different hostname.\n\nWhat to do:\nSend the detailed result to your network security team.", destBlock)
+							return Evaluation{
+								Scenario:    ScenarioPrivateTLSHostnameMismatch,
+								ExitCode:    6,
+								Title:       title,
+								Explanation: ex,
+								Impact:      imp,
+								Summary:     sum,
+								State:       AssessmentBroken,
+								LikelyOwner: OwnerSecurityOrProxy,
+								NextAction:  "Send the detailed result to your network security team.",
+							}
+
+						case TLSAddrUntrustedCertificate:
+							title := "The certificate is not trusted by this workload"
+							var lines []string
+							for _, r := range tlsObs.GetResults() {
+								lines = append(lines, fmt.Sprintf("%s → %s", tgt.Hostname, r.GetDestination()))
+							}
+							destBlock := strings.Join(lines, "\n")
+							ex := "The private address is reachable, but the certificate presented is not trusted by this workload."
+							imp := "The application cannot establish a secure connection because certificate trust validation failed."
+							sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Certificate not trusted\n\nWhat to do:\nSend the detailed result to your application platform or network security team.", destBlock)
+							return Evaluation{
+								Scenario:    ScenarioPrivateTLSUntrusted,
+								ExitCode:    6,
+								Title:       title,
+								Explanation: ex,
+								Impact:      imp,
+								Summary:     sum,
+								State:       AssessmentBroken,
+								LikelyOwner: OwnerSecurityOrProxy,
+								NextAction:  "Send the detailed result to your application platform or network security team.",
+							}
+
+						case TLSAddrExpiredCertificate:
+							title := "The certificate has expired"
+							var lines []string
+							for _, r := range tlsObs.GetResults() {
+								lines = append(lines, fmt.Sprintf("%s → %s", tgt.Hostname, r.GetDestination()))
+							}
+							destBlock := strings.Join(lines, "\n")
+							ex := "The private address is reachable, but the presented certificate has expired."
+							imp := "The application cannot establish a secure connection because the certificate is no longer valid."
+							sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Certificate expired\n\nWhat to do:\nSend the detailed result to your service owner or network security team.", destBlock)
+							return Evaluation{
+								Scenario:    ScenarioPrivateTLSExpired,
+								ExitCode:    6,
+								Title:       title,
+								Explanation: ex,
+								Impact:      imp,
+								Summary:     sum,
+								State:       AssessmentBroken,
+								LikelyOwner: OwnerSecurityOrProxy,
+								NextAction:  "Send the detailed result to your service owner or network security team.",
+							}
+
+						case TLSAddrHandshakeTimeout:
+							title := "The secure connection timed out"
+							var lines []string
+							for _, r := range tlsObs.GetResults() {
+								lines = append(lines, fmt.Sprintf("%s → %s", tgt.Hostname, r.GetDestination()))
+							}
+							destBlock := strings.Join(lines, "\n")
+							ex := "The TCP port is reachable, but the TLS handshake did not finish before the timeout."
+							imp := "The workload could not complete TLS negotiation within the operation deadline."
+							sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Timed out\n\nThe TCP port is reachable, but the TLS handshake did not finish before the timeout.\n\nWhat to do:\nSend the detailed result to your network security team.", destBlock)
+							return Evaluation{
+								Scenario:    ScenarioPrivateTLSTimeout,
+								ExitCode:    6,
+								Title:       title,
+								Explanation: ex,
+								Impact:      imp,
+								Summary:     sum,
+								State:       AssessmentBroken,
+								LikelyOwner: OwnerSecurityOrProxy,
+								NextAction:  "Send the detailed result to your network security team.",
+							}
+
+						default:
+							title := "The secure connection could not be established"
+							var lines []string
+							for _, r := range tlsObs.GetResults() {
+								lines = append(lines, fmt.Sprintf("%s → %s", tgt.Hostname, r.GetDestination()))
+							}
+							destBlock := strings.Join(lines, "\n")
+							ex := "The private address is reachable, but TLS negotiation failed."
+							imp := "The application cannot establish a secure TLS connection."
+							sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Failed\n\nThe private address is reachable, but TLS negotiation failed.\n\nWhat to do:\nSend the detailed result to your application platform or network security team.", destBlock)
+							return Evaluation{
+								Scenario:    ScenarioPrivateTLSFailed,
+								ExitCode:    6,
+								Title:       title,
+								Explanation: ex,
+								Impact:      imp,
+								Summary:     sum,
+								State:       AssessmentBroken,
+								LikelyOwner: OwnerSecurityOrProxy,
+								NextAction:  "Send the detailed result to your application platform or network security team.",
+							}
+						}
+
+					case AggregateTLSPartiallyValid:
+						var lines []string
+						for _, r := range tlsObs.GetResults() {
+							if r.GetStatus() == TLSAddrValid {
+								lines = append(lines, fmt.Sprintf("%-18s TLS valid", r.GetDestination()))
+							} else {
+								lines = append(lines, fmt.Sprintf("%-18s %s", r.GetDestination(), formatShortTLSFailure(r.GetStatus())))
+							}
+						}
+						destBlock := strings.Join(lines, "\n")
+						ex := "At least one private address validated TLS and at least one did not."
+						imp := "The application may behave differently depending on which address it uses."
+						sum := fmt.Sprintf("%s\n\nThe application may behave differently depending on which address it uses.\n\nWhat to do:\nSend the detailed result to your network security team.", destBlock)
+						return Evaluation{
+							Scenario:    ScenarioPrivateTLSPartial,
+							ExitCode:    8,
+							Title:       "TLS works for only some private addresses",
+							Explanation: ex,
+							Impact:      imp,
+							Summary:     sum,
+							State:       AssessmentUnknown,
+							LikelyOwner: OwnerSecurityOrProxy,
+							NextAction:  "Send the detailed result to your network security team.",
+						}
+					}
+				}
+
+				// Untested TLS (Phase 3 fallback)
 				title := "Private connection is reachable"
 				if len(tcpObs.GetResults()) > 1 {
 					title = "Private connections are reachable"
@@ -215,7 +426,7 @@ func Evaluate(tgt *target.Target, dnsStatus DNSStatus, aggClass AggregateClassif
 				}
 				destBlock := strings.Join(lines, "\n")
 				ex := "At least one returned private address accepted the TCP connection and at least one did not."
-				imp := "The application may behave intermittently depending on which address it selects."
+				imp := "The application may behave intermittently depending on which address it uses."
 				sum := fmt.Sprintf("%s\n\nThe application may work intermittently depending on which address it uses.\n\nWhat to do:\nSend this result to your network team.", destBlock)
 				return Evaluation{
 					Scenario:    ScenarioPrivateTCPPartial,
@@ -231,7 +442,7 @@ func Evaluate(tgt *target.Target, dnsStatus DNSStatus, aggClass AggregateClassif
 			}
 		}
 
-		// Phase 2 fallback or untested TCP
+		// Phase 2 fallback or untested TCP/TLS
 		var lines []string
 		for _, addr := range addresses {
 			lines = append(lines, fmt.Sprintf("%s → %s (private)", tgt.Hostname, addr))
@@ -376,6 +587,35 @@ func Evaluate(tgt *target.Target, dnsStatus DNSStatus, aggClass AggregateClassif
 	}
 }
 
+func determineDominantTLSStatus(results []MinimalTLSResultItem) TLSAddressStatus {
+	if len(results) == 0 {
+		return TLSAddrError
+	}
+	counts := make(map[TLSAddressStatus]int)
+	for _, r := range results {
+		counts[r.GetStatus()]++
+	}
+
+	prio := []TLSAddressStatus{
+		TLSAddrHostnameMismatch,
+		TLSAddrUntrustedCertificate,
+		TLSAddrExpiredCertificate,
+		TLSAddrNotYetValid,
+		TLSAddrHandshakeTimeout,
+		TLSAddrConnectionClosed,
+		TLSAddrHandshakeFailed,
+		TLSAddrError,
+	}
+
+	for _, s := range prio {
+		if counts[s] > 0 {
+			return s
+		}
+	}
+
+	return results[0].GetStatus()
+}
+
 func formatAddressClassificationLabel(cls AddressClassification) string {
 	switch cls {
 	case AddrPrivate:
@@ -426,6 +666,25 @@ func formatShortTCPFailure(status TCPAddressStatus) string {
 		return "unreachable"
 	case TCPAddrCanceled:
 		return "canceled"
+	default:
+		return "failed"
+	}
+}
+
+func formatShortTLSFailure(status TLSAddressStatus) string {
+	switch status {
+	case TLSAddrHostnameMismatch:
+		return "hostname mismatch"
+	case TLSAddrUntrustedCertificate:
+		return "certificate not trusted"
+	case TLSAddrExpiredCertificate:
+		return "certificate expired"
+	case TLSAddrNotYetValid:
+		return "certificate not yet valid"
+	case TLSAddrHandshakeTimeout:
+		return "timed out"
+	case TLSAddrConnectionClosed:
+		return "connection closed"
 	default:
 		return "failed"
 	}

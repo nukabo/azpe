@@ -133,21 +133,57 @@ func (a AggregateTCPStatus) String() string {
 	return string(a)
 }
 
-// TLSStatus represents the result of TLS validation.
+// TLSStatus represents the aggregate status of TLS validation.
 type TLSStatus string
 
 const (
-	TLSStatusHandshakeOK  TLSStatus = "HANDSHAKE_OK"
-	TLSStatusCertExpired  TLSStatus = "CERT_EXPIRED"
-	TLSStatusNameMismatch TLSStatus = "NAME_MISMATCH"
-	TLSStatusUntrustedCA  TLSStatus = "UNTRUSTED_CA"
-	TLSStatusFailed       TLSStatus = "FAILED"
-	TLSStatusSkipped      TLSStatus = "SKIPPED"
-	TLSStatusUnknown      TLSStatus = "UNKNOWN"
+	TLSStatusSuccess TLSStatus = "SUCCESS"
+	TLSStatusFailed  TLSStatus = "FAILED"
+	TLSStatusPartial TLSStatus = "PARTIAL"
+	TLSStatusSkipped TLSStatus = "SKIPPED"
+	TLSStatusUnknown TLSStatus = "UNKNOWN"
 )
 
 func (t TLSStatus) String() string {
 	return string(t)
+}
+
+// TLSAddressStatus represents the TLS status of a single IP address.
+type TLSAddressStatus string
+
+const (
+	TLSAddrValid                TLSAddressStatus = "VALID"
+	TLSAddrHostnameMismatch     TLSAddressStatus = "HOSTNAME_MISMATCH"
+	TLSAddrUntrustedCertificate TLSAddressStatus = "UNTRUSTED_CERTIFICATE"
+	TLSAddrExpiredCertificate   TLSAddressStatus = "EXPIRED_CERTIFICATE"
+	TLSAddrNotYetValid          TLSAddressStatus = "NOT_YET_VALID"
+	TLSAddrHandshakeTimeout     TLSAddressStatus = "HANDSHAKE_TIMEOUT"
+	TLSAddrHandshakeFailed      TLSAddressStatus = "HANDSHAKE_FAILED"
+	TLSAddrConnectionClosed     TLSAddressStatus = "CONNECTION_CLOSED"
+	TLSAddrCanceled             TLSAddressStatus = "CANCELED"
+	TLSAddrError                TLSAddressStatus = "ERROR"
+	TLSAddrSkipped              TLSAddressStatus = "SKIPPED"
+)
+
+func (t TLSAddressStatus) String() string {
+	return string(t)
+}
+
+// AggregateTLSStatus represents the overall aggregate status across all TLS validation attempts.
+type AggregateTLSStatus string
+
+const (
+	AggregateTLSAllValid       AggregateTLSStatus = "ALL_VALID"
+	AggregateTLSNoneValid      AggregateTLSStatus = "NONE_VALID"
+	AggregateTLSPartiallyValid AggregateTLSStatus = "PARTIALLY_VALID"
+	AggregateTLSNotAttempted   AggregateTLSStatus = "NOT_ATTEMPTED"
+	AggregateTLSNotApplicable  AggregateTLSStatus = "NOT_APPLICABLE"
+	AggregateTLSCanceled       AggregateTLSStatus = "CANCELED"
+	AggregateTLSUnknown        AggregateTLSStatus = "UNKNOWN"
+)
+
+func (a AggregateTLSStatus) String() string {
+	return string(a)
 }
 
 // HTTPStatus represents the result of the HTTP health request.

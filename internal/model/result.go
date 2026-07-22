@@ -127,16 +127,107 @@ func (t TCPObservation) GetResults() []assess.MinimalTCPResultItem {
 	return items
 }
 
+// LeafCertInfo contains non-secret leaf certificate metadata for diagnostics.
+type LeafCertInfo struct {
+	Subject      string   `json:"subject,omitempty"`
+	CommonName   string   `json:"commonName,omitempty"`
+	DNSNames     []string `json:"dnsNames,omitempty"`
+	Issuer       string   `json:"issuer,omitempty"`
+	SerialNumber string   `json:"serialNumber,omitempty"`
+	NotBefore    string   `json:"notBefore,omitempty"`
+	NotAfter     string   `json:"notAfter,omitempty"`
+}
+
+// TLSResultItem represents a single TLS connection/validation observation for an address.
+type TLSResultItem struct {
+	Address              string                       `json:"address"`
+	Version              string                       `json:"version"` // "IPv4" or "IPv6"
+	Classification       assess.AddressClassification `json:"classification"`
+	Destination          string                       `json:"destination"` // "10.42.3.7:443" or "[fd00::7]:443"
+	Port                 int                          `json:"port"`
+	ServerName           string                       `json:"serverName"`
+	Status               assess.TLSAddressStatus      `json:"status"`
+	Stage                string                       `json:"stage,omitempty"` // "DIAL", "HANDSHAKE", "CERTIFICATE_VALIDATION", "COMPLETE"
+	DurationMs           int64                        `json:"durationMs"`
+	TLSVersion           string                       `json:"tlsVersion,omitempty"`
+	CipherSuite          string                       `json:"cipherSuite,omitempty"`
+	HostnameValid        *bool                        `json:"hostnameValid,omitempty"`
+	CertificateTrusted   *bool                        `json:"certificateTrusted,omitempty"`
+	PeerCertificateCount int                          `json:"peerCertificateCount,omitempty"`
+	VerifiedChainCount   int                          `json:"verifiedChainCount,omitempty"`
+	LeafCertificate      *LeafCertInfo                `json:"leafCertificate,omitempty"`
+	ErrorCategory        string                       `json:"errorCategory,omitempty"`
+	Error                string                       `json:"error,omitempty"`
+}
+
+func (r TLSResultItem) GetAddress() string {
+	return r.Address
+}
+
+func (r TLSResultItem) GetDestination() string {
+	return r.Destination
+}
+
+func (r TLSResultItem) GetPort() int {
+	return r.Port
+}
+
+func (r TLSResultItem) GetServerName() string {
+	return r.ServerName
+}
+
+func (r TLSResultItem) GetStatus() assess.TLSAddressStatus {
+	return r.Status
+}
+
+func (r TLSResultItem) GetStage() string {
+	return r.Stage
+}
+
+func (r TLSResultItem) GetDurationMs() int64 {
+	return r.DurationMs
+}
+
+func (r TLSResultItem) GetTLSVersion() string {
+	return r.TLSVersion
+}
+
+func (r TLSResultItem) GetCipherSuite() string {
+	return r.CipherSuite
+}
+
+func (r TLSResultItem) GetErrorCategory() string {
+	return r.ErrorCategory
+}
+
+func (r TLSResultItem) GetError() string {
+	return r.Error
+}
+
 // TLSObservation contains TLS certificate and handshake observations.
 type TLSObservation struct {
-	Status      assess.TLSStatus `json:"status"`
-	TLSVersion  string           `json:"tlsVersion,omitempty"`
-	CipherSuite string           `json:"cipherSuite,omitempty"`
-	CertValid   *bool            `json:"certValid,omitempty"`
-	CertSubject string           `json:"certSubject,omitempty"`
-	CertIssuer  string           `json:"certIssuer,omitempty"`
-	CertExpiry  string           `json:"certExpiry,omitempty"`
-	Note        string           `json:"note,omitempty"`
+	Status          assess.TLSStatus          `json:"status"`
+	AggregateStatus assess.AggregateTLSStatus `json:"aggregateStatus,omitempty"`
+	ServerName      string                    `json:"serverName,omitempty"`
+	DurationMs      int64                     `json:"durationMs"`
+	Results         []TLSResultItem           `json:"results"`
+	Note            string                    `json:"note,omitempty"`
+}
+
+func (t TLSObservation) GetAggregateStatus() assess.AggregateTLSStatus {
+	return t.AggregateStatus
+}
+
+func (t TLSObservation) GetServerName() string {
+	return t.ServerName
+}
+
+func (t TLSObservation) GetResults() []assess.MinimalTLSResultItem {
+	var items []assess.MinimalTLSResultItem
+	for _, r := range t.Results {
+		items = append(items, r)
+	}
+	return items
 }
 
 // HTTPObservation contains minimal HTTP probe observations.
@@ -159,8 +250,8 @@ type AssessmentInfo struct {
 	NextAction  string                    `json:"nextAction,omitempty"`
 }
 
-// NewResultFromDNSAndTCP evaluates DNS and TCP observations and builds the diagnostic Result.
-func NewResultFromDNSAndTCP(tgt *target.Target, startTime time.Time, dnsObs DNSObservation, addrObs AddrObservation, tcpObs TCPObservation) *Result {
+// NewResultFromDNSAndTCPAndTLS evaluates DNS, TCP, and TLS observations and builds the diagnostic Result.
+func NewResultFromDNSAndTCPAndTLS(tgt *target.Target, startTime time.Time, dnsObs DNSObservation, addrObs AddrObservation, tcpObs TCPObservation, tlsObs TLSObservation) *Result {
 	hostname, _ := os.Hostname()
 	duration := time.Since(startTime).Milliseconds()
 
@@ -172,7 +263,7 @@ func NewResultFromDNSAndTCP(tgt *target.Target, startTime time.Time, dnsObs DNSO
 		classList = append(classList, ipObs.Classification)
 	}
 
-	eval := assess.Evaluate(tgt, dnsObs.Status, addrObs.Classification, addrsList, classList, dnsObs.ErrorCategory, dnsObs.ErrorMessage, tcpObs)
+	eval := assess.Evaluate(tgt, dnsObs.Status, addrObs.Classification, addrsList, classList, dnsObs.ErrorCategory, dnsObs.ErrorMessage, tcpObs, tlsObs)
 
 	errorsList := []string{}
 	if dnsObs.ErrorMessage != "" && eval.Scenario == assess.ScenarioDNSLookupFailed {
@@ -181,6 +272,11 @@ func NewResultFromDNSAndTCP(tgt *target.Target, startTime time.Time, dnsObs DNSO
 	for _, tcpRes := range tcpObs.Results {
 		if tcpRes.Error != "" {
 			errorsList = append(errorsList, tcpRes.Error)
+		}
+	}
+	for _, tlsRes := range tlsObs.Results {
+		if tlsRes.Error != "" {
+			errorsList = append(errorsList, tlsRes.Error)
 		}
 	}
 
@@ -205,6 +301,14 @@ func NewResultFromDNSAndTCP(tgt *target.Target, startTime time.Time, dnsObs DNSO
 	if tcpObs.Results == nil {
 		tcpObs.Results = []TCPResultItem{}
 	}
+	if tlsObs.Results == nil {
+		tlsObs.Results = []TLSResultItem{}
+	}
+	for i := range tlsObs.Results {
+		if tlsObs.Results[i].LeafCertificate != nil && tlsObs.Results[i].LeafCertificate.DNSNames == nil {
+			tlsObs.Results[i].LeafCertificate.DNSNames = []string{}
+		}
+	}
 
 	return &Result{
 		SchemaVersion: version.SchemaVersion,
@@ -220,13 +324,10 @@ func NewResultFromDNSAndTCP(tgt *target.Target, startTime time.Time, dnsObs DNSO
 		DNS:     dnsObs,
 		Address: addrObs,
 		TCP:     tcpObs,
-		TLS: TLSObservation{
-			Status: assess.TLSStatusSkipped,
-			Note:   "TLS validation not implemented in Phase 3",
-		},
+		TLS:     tlsObs,
 		HTTP: HTTPObservation{
 			Status: assess.HTTPStatusSkipped,
-			Note:   "HTTP request not implemented in Phase 3",
+			Note:   "HTTP request not implemented in Phase 4",
 		},
 		Assessment: AssessmentInfo{
 			Scenario:    eval.Scenario,
@@ -243,7 +344,19 @@ func NewResultFromDNSAndTCP(tgt *target.Target, startTime time.Time, dnsObs DNSO
 	}
 }
 
-// NewResultFromDNS evaluates DNS observations without TCP probing (for compatibility/helper).
+// NewResultFromDNSAndTCP evaluates DNS and TCP observations without TLS probing (helper).
+func NewResultFromDNSAndTCP(tgt *target.Target, startTime time.Time, dnsObs DNSObservation, addrObs AddrObservation, tcpObs TCPObservation) *Result {
+	tlsObs := TLSObservation{
+		Status:          assess.TLSStatusSkipped,
+		AggregateStatus: assess.AggregateTLSNotAttempted,
+		ServerName:      tgt.Hostname,
+		Results:         []TLSResultItem{},
+		Note:            "TLS probe not performed",
+	}
+	return NewResultFromDNSAndTCPAndTLS(tgt, startTime, dnsObs, addrObs, tcpObs, tlsObs)
+}
+
+// NewResultFromDNS evaluates DNS observations without TCP or TLS probing (helper).
 func NewResultFromDNS(tgt *target.Target, startTime time.Time, dnsObs DNSObservation, addrObs AddrObservation) *Result {
 	tcpObs := TCPObservation{
 		Status:          assess.TCPStatusSkipped,

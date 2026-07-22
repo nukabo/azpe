@@ -22,7 +22,7 @@ When an application cannot reach an Azure service, engineers commonly cannot dis
 1. Local or corporate DNS resolution failures
 2. Public IP resolution instead of Private IP resolution
 3. Network path & routing failures (TCP timeout / connection refused)
-4. TLS / certificate handshake failures
+4. TLS / certificate handshake failures (hostname mismatch / untrusted CA / expired certificate)
 5. Application authentication or authorization failures (HTTP 401/403)
 6. Upstream service outages (HTTP 5xx)
 
@@ -42,35 +42,38 @@ When an application cannot reach an Azure service, engineers commonly cannot dis
 > **No Control-Plane Claims**: AZPE observes connectivity from the workload's current execution environment without Azure control-plane access.
 > - An approved Azure Private Endpoint configuration in the Azure portal **does not prove workload connectivity** from your environment.
 > - Observing resolution to a private IP address is **evidence**, not formal proof, that the target is using private DNS.
-> - A successful TCP connection proves only that a port opened, not that TLS, authentication, or the service is healthy.
+> - A valid TLS connection proves that the certificate chain is trusted and matches the hostname, not that application access or authorization succeeds.
+> - Certificate validation is **NEVER** disabled (`InsecureSkipVerify: false`).
 > 
-> Therefore, AZPE will never claim `Private Endpoint verified`. It states: *Private connection is reachable*, *Private DNS looks correct*, or *This workload is not using private DNS*.
+> Therefore, AZPE will never claim `Private Endpoint verified`. It states: *Secure private connection looks correct*, *Private connection is reachable*, or *This workload is not using private DNS*.
 
-## Current Status (Phase 3)
+## Current Status (Phase 4)
 
-Phase 3 implements:
+Phase 4 implements:
 - Operating-system DNS resolution using Go's standard library resolver.
 - Azure service hostname recognition catalogue (Key Vault, Storage, SQL, Cosmos DB, AI Search, OpenAI, ACR, App Configuration, Service Bus).
 - IP address classification across 10 categories (`PRIVATE`, `PUBLIC`, `LOOPBACK`, `LINK_LOCAL`, `UNSPECIFIED`, `MULTICAST`, `DOCUMENTATION`, `BENCHMARK`, `RESERVED`, `UNKNOWN`).
 - Direct TCP connectivity probing (`net.Dialer.DialContext`) directly against captured IP addresses and target ports without secondary DNS lookups.
-- Per-address TCP observation and latency measurement (`CONNECTED`, `REFUSED`, `TIMEOUT`, `UNREACHABLE`, `CANCELED`, `ERROR`).
+- Direct TLS validation (`crypto/tls`) against captured private IPs using original Azure service hostname for SNI and system trust store certificate verification.
+- Per-address TLS observation, protocol version, cipher suite, and leaf certificate metadata (`VALID`, `HOSTNAME_MISMATCH`, `UNTRUSTED_CERTIFICATE`, `EXPIRED_CERTIFICATE`, `NOT_YET_VALID`, `HANDSHAKE_TIMEOUT`, `HANDSHAKE_FAILED`, `CONNECTION_CLOSED`).
 - Plain-language diagnostic assessments and exit code contracts:
-  - Exit `0`: Recognized Azure service, private DNS active, all TCP connection probes succeeded (`✓ Private connection is reachable`).
+  - Exit `0`: Recognized Azure service, private DNS active, all TCP connection probes succeeded, and all TLS validations succeeded (`✓ Secure private connection looks correct`).
   - Exit `2`: Invalid CLI usage or target syntax error.
   - Exit `3`: DNS lookup failed for a recognized Azure service hostname (`✗ The Azure service name cannot be resolved`).
   - Exit `4`: Recognized Azure service hostname resolved exclusively to public addresses (`✗ This workload is not using private DNS`).
   - Exit `5`: Recognized Azure service hostname resolved privately, but ALL TCP connection probes failed (`✗ The private address cannot be reached`).
-  - Exit `8`: Inconclusive / Partial (mixed DNS, partial TCP reachability, special-purpose IPs, IP literal, unrecognized non-Azure target).
+  - Exit `6`: Recognized Azure service hostname resolved privately, TCP succeeded, but ALL TLS validations failed (`✗ The certificate does not match the Azure service name`, `✗ The certificate is not trusted by this workload`, `✗ The certificate has expired`).
+  - Exit `8`: Inconclusive / Partial (mixed DNS, partial TCP reachability, partial TLS validity, special-purpose IPs, IP literal, unrecognized non-Azure target).
   - Exit `10`: Unexpected internal error.
 
-*Note: TLS validation and HTTP health probes remain untested in Phase 3 and are planned for subsequent phases.*
+*Note: HTTP health probes remain untested in Phase 4 and are planned for subsequent phases.*
 
 ## Planned v0.1 Roadmap
 
 - [x] Target parsing, result modeling, CLI routing, JSON & terminal rendering (Phase 1)
 - [x] Operating-system DNS resolution, target recognition & IP address classification (Phase 2)
 - [x] Direct TCP connectivity probing & per-address latency measurement (Phase 3)
-- [ ] TLS certificate verification & SNI validation (Phase 4)
+- [x] Direct TLS validation, SNI & system trust store certificate verification (Phase 4)
 - [ ] Minimal HTTP HEAD/GET request & status code classification (Phase 5)
 
 ## Building from Source
@@ -89,6 +92,7 @@ go build -o azpe ./cmd/azpe
 ```bash
 go test -v ./...
 go vet ./...
+go test -race ./...
 ```
 
 ### Cross-Compilation

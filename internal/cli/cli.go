@@ -14,22 +14,28 @@ import (
 	"github.com/azpe/azpe/internal/output"
 	"github.com/azpe/azpe/internal/target"
 	"github.com/azpe/azpe/internal/tcp"
+	"github.com/azpe/azpe/internal/tls"
 	"github.com/azpe/azpe/internal/version"
 )
 
 // Run executes the CLI logic with the provided argument list and writers.
 // Returns an exit code suitable for os.Exit.
 func Run(args []string, stdout, stderr io.Writer) int {
-	return RunWithResolverAndProber(args, stdout, stderr, &dns.OSResolver{}, &tcp.OSTCPProber{})
+	return RunWithResolverProberAndTLSProber(args, stdout, stderr, &dns.OSResolver{}, &tcp.OSTCPProber{}, &tls.OSTLSProber{})
 }
 
 // RunWithResolver executes the CLI logic using a custom DNS resolver (useful for testing).
 func RunWithResolver(args []string, stdout, stderr io.Writer, resolver dns.Resolver) int {
-	return RunWithResolverAndProber(args, stdout, stderr, resolver, &tcp.OSTCPProber{})
+	return RunWithResolverProberAndTLSProber(args, stdout, stderr, resolver, &tcp.OSTCPProber{}, &tls.OSTLSProber{})
 }
 
-// RunWithResolverAndProber executes the CLI logic using a custom DNS resolver and TCP prober (useful for testing).
+// RunWithResolverAndProber executes the CLI logic using custom DNS resolver and TCP prober (useful for testing).
 func RunWithResolverAndProber(args []string, stdout, stderr io.Writer, resolver dns.Resolver, prober tcp.Prober) int {
+	return RunWithResolverProberAndTLSProber(args, stdout, stderr, resolver, prober, &tls.OSTLSProber{})
+}
+
+// RunWithResolverProberAndTLSProber executes CLI logic with full dependency injection for testing.
+func RunWithResolverProberAndTLSProber(args []string, stdout, stderr io.Writer, resolver dns.Resolver, prober tcp.Prober, tlsProber tls.Prober) int {
 	if len(args) == 0 {
 		printHelp(stdout)
 		return ExitSuccess
@@ -45,7 +51,7 @@ func RunWithResolverAndProber(args []string, stdout, stderr io.Writer, resolver 
 		printVersion(stdout)
 		return ExitSuccess
 	case "probe":
-		return runProbe(args[1:], stdout, stderr, resolver, prober)
+		return runProbe(args[1:], stdout, stderr, resolver, prober, tlsProber)
 	default:
 		if subcommand == "-h" || subcommand == "--help" {
 			printHelp(stdout)
@@ -97,7 +103,7 @@ func printVersion(w io.Writer) {
 	fmt.Fprintf(w, "AZPE version %s (JSON schema v%d)\n", version.Version, version.SchemaVersion)
 }
 
-func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver, prober tcp.Prober) int {
+func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver, prober tcp.Prober, tlsProber tls.Prober) int {
 	fs := flag.NewFlagSet("probe", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
@@ -150,8 +156,21 @@ func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver, pr
 	dnsObs, addrObs := dns.Resolve(ctx, resolver, tgt)
 
 	var tcpObs model.TCPObservation
+	var tlsObs model.TLSObservation
+
 	if tgt.TargetType == target.TargetTypeRecognizedAzure && dnsObs.Status == assess.DNSStatusSuccess && addrObs.Classification == assess.AggregatePrivateOnly {
 		tcpObs = tcp.ProbeAll(ctx, prober, dnsObs.Addresses, tgt.Port)
+		if tcpObs.Status == assess.TCPStatusSuccess || tcpObs.Status == assess.TCPStatusPartial {
+			tlsObs = tls.ProbeAll(ctx, tlsProber, tcpObs, tgt.Hostname)
+		} else {
+			tlsObs = model.TLSObservation{
+				Status:          assess.TLSStatusSkipped,
+				AggregateStatus: assess.AggregateTLSNotAttempted,
+				ServerName:      tgt.Hostname,
+				Results:         []model.TLSResultItem{},
+				Note:            "TLS was not attempted because no TCP connection succeeded.",
+			}
+		}
 	} else {
 		tcpObs = model.TCPObservation{
 			Status:          assess.TCPStatusSkipped,
@@ -161,9 +180,16 @@ func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver, pr
 			Results:         []model.TCPResultItem{},
 			Note:            "TCP connectivity probe not performed",
 		}
+		tlsObs = model.TLSObservation{
+			Status:          assess.TLSStatusSkipped,
+			AggregateStatus: assess.AggregateTLSNotAttempted,
+			ServerName:      tgt.Hostname,
+			Results:         []model.TLSResultItem{},
+			Note:            "TLS probe not performed",
+		}
 	}
 
-	res := model.NewResultFromDNSAndTCP(tgt, startTime, dnsObs, addrObs, tcpObs)
+	res := model.NewResultFromDNSAndTCPAndTLS(tgt, startTime, dnsObs, addrObs, tcpObs, tlsObs)
 
 	opts := output.FormatOptions{
 		JSON:    *jsonFlag,
@@ -178,14 +204,14 @@ func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver, pr
 
 	// Exit Code Mapping based on scenario / evaluation
 	switch res.Assessment.Scenario {
-	case assess.ScenarioPrivateTCPReachable:
+	case assess.ScenarioPrivateTLSValid, assess.ScenarioPrivateTCPReachable, assess.ScenarioPrivateDNSActive:
 		return ExitSuccess // Exit code 0
+	case assess.ScenarioPrivateTLSFailed, assess.ScenarioPrivateTLSHostnameMismatch, assess.ScenarioPrivateTLSUntrusted, assess.ScenarioPrivateTLSExpired, assess.ScenarioPrivateTLSTimeout:
+		return ExitTLSFailure // Exit code 6
 	case assess.ScenarioPrivateTCPUnreachable:
 		return ExitTCPFailure // Exit code 5
-	case assess.ScenarioPrivateTCPPartial:
+	case assess.ScenarioPrivateTLSPartial, assess.ScenarioPrivateTCPPartial:
 		return ExitInconclusive // Exit code 8
-	case assess.ScenarioPrivateDNSActive:
-		return ExitSuccess // Exit code 0
 	case assess.ScenarioPrivateDNSNotActive:
 		return ExitNotPrivate // Exit code 4
 	case assess.ScenarioDNSLookupFailed:

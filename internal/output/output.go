@@ -144,6 +144,69 @@ func renderDetailedTerminal(w io.Writer, res *model.Result, useColor bool) error
 		}
 	}
 
+	// Render TLS details if performed
+	if res.TLS.AggregateStatus != assess.AggregateTLSNotAttempted && res.TLS.AggregateStatus != assess.AggregateTLSNotApplicable && res.TLS.AggregateStatus != "" {
+		fmt.Fprintln(w, sectionHeader("TLS"))
+		fmt.Fprintln(w)
+		fmt.Fprintf(w, "Status               %s\n", formatAggregateTLSStatus(res.TLS.AggregateStatus))
+		fmt.Fprintf(w, "Server name          %s\n", res.TLS.ServerName)
+		fmt.Fprintf(w, "Total duration       %s\n", formatDuration(res.TLS.DurationMs))
+		fmt.Fprintln(w)
+
+		if len(res.TLS.Results) > 0 {
+			fmt.Fprintln(w, "Results:")
+			for _, r := range res.TLS.Results {
+				fmt.Fprintf(w, "  - %s\n", r.Destination)
+				fmt.Fprintf(w, "    Status           %s\n", formatTLSAddressStatus(r.Status))
+				if r.Stage != "" && r.Stage != "COMPLETE" {
+					fmt.Fprintf(w, "    Stage            %s\n", r.Stage)
+				}
+				fmt.Fprintf(w, "    Duration         %s\n", formatDuration(r.DurationMs))
+				if r.TLSVersion != "" {
+					fmt.Fprintf(w, "    TLS version      %s\n", r.TLSVersion)
+				}
+				if r.CipherSuite != "" {
+					fmt.Fprintf(w, "    Cipher suite     %s\n", r.CipherSuite)
+				}
+				if r.HostnameValid != nil {
+					hVal := "Matches"
+					if !*r.HostnameValid {
+						hVal = "Mismatch"
+					}
+					fmt.Fprintf(w, "    Hostname         %s\n", hVal)
+				}
+				if r.CertificateTrusted != nil {
+					tVal := "Trusted"
+					if !*r.CertificateTrusted {
+						tVal = "Not trusted"
+					}
+					fmt.Fprintf(w, "    Certificate      %s\n", tVal)
+				}
+				if r.LeafCertificate != nil {
+					if r.LeafCertificate.Subject != "" {
+						fmt.Fprintf(w, "    Subject          %s\n", r.LeafCertificate.Subject)
+					}
+					if r.LeafCertificate.Issuer != "" {
+						fmt.Fprintf(w, "    Issuer           %s\n", r.LeafCertificate.Issuer)
+					}
+					if r.LeafCertificate.NotBefore != "" {
+						fmt.Fprintf(w, "    Valid from       %s\n", r.LeafCertificate.NotBefore)
+					}
+					if r.LeafCertificate.NotAfter != "" {
+						fmt.Fprintf(w, "    Valid until      %s\n", r.LeafCertificate.NotAfter)
+					}
+				}
+				if r.ErrorCategory != "" {
+					fmt.Fprintf(w, "    Error category   %s\n", r.ErrorCategory)
+				}
+				if r.Error != "" {
+					fmt.Fprintf(w, "    Error            %s\n", r.Error)
+				}
+			}
+			fmt.Fprintln(w)
+		}
+	}
+
 	fmt.Fprintln(w, sectionHeader("Tests"))
 	fmt.Fprintln(w)
 	dnsTestStr := "Completed"
@@ -157,7 +220,13 @@ func renderDetailedTerminal(w io.Writer, res *model.Result, useColor bool) error
 		tcpTestStr = "Completed"
 	}
 	fmt.Fprintf(w, "Connection           %s\n", tcpTestStr)
-	fmt.Fprintln(w, "TLS                  Not performed")
+
+	tlsTestStr := "Not performed"
+	if res.TLS.AggregateStatus != assess.AggregateTLSNotAttempted && res.TLS.AggregateStatus != assess.AggregateTLSNotApplicable && res.TLS.AggregateStatus != "" {
+		tlsTestStr = "Completed"
+	}
+	fmt.Fprintf(w, "TLS                  %s\n", tlsTestStr)
+
 	fmt.Fprintln(w, "HTTP                 Not performed")
 	fmt.Fprintln(w)
 
@@ -201,11 +270,13 @@ func renderDetailedTerminal(w io.Writer, res *model.Result, useColor bool) error
 
 func getSymbolAndColor(scenario assess.AssessmentScenario) (string, string) {
 	switch scenario {
-	case assess.ScenarioPrivateDNSActive, assess.ScenarioPrivateTCPReachable:
+	case assess.ScenarioPrivateDNSActive, assess.ScenarioPrivateTCPReachable, assess.ScenarioPrivateTLSValid:
 		return "✓", colorGreen
-	case assess.ScenarioPrivateDNSNotActive, assess.ScenarioDNSLookupFailed, assess.ScenarioPrivateTCPUnreachable:
+	case assess.ScenarioPrivateDNSNotActive, assess.ScenarioDNSLookupFailed, assess.ScenarioPrivateTCPUnreachable,
+		assess.ScenarioPrivateTLSFailed, assess.ScenarioPrivateTLSHostnameMismatch, assess.ScenarioPrivateTLSUntrusted,
+		assess.ScenarioPrivateTLSExpired, assess.ScenarioPrivateTLSTimeout:
 		return "✗", colorRed
-	case assess.ScenarioDNSMixed, assess.ScenarioSpecialOnly, assess.ScenarioPrivateTCPPartial:
+	case assess.ScenarioDNSMixed, assess.ScenarioSpecialOnly, assess.ScenarioPrivateTCPPartial, assess.ScenarioPrivateTLSPartial:
 		return "⚠", colorYellow
 	default:
 		return "", ""
@@ -318,6 +389,52 @@ func formatTCPAddressStatus(status assess.TCPAddressStatus) string {
 	case assess.TCPAddrCanceled:
 		return "Canceled"
 	case assess.TCPAddrError:
+		return "Error"
+	default:
+		return string(status)
+	}
+}
+
+func formatAggregateTLSStatus(agg assess.AggregateTLSStatus) string {
+	switch agg {
+	case assess.AggregateTLSAllValid:
+		return "Valid for all addresses"
+	case assess.AggregateTLSNoneValid:
+		return "No addresses passed TLS validation"
+	case assess.AggregateTLSPartiallyValid:
+		return "Some addresses valid"
+	case assess.AggregateTLSNotAttempted:
+		return "Not attempted"
+	case assess.AggregateTLSNotApplicable:
+		return "Not applicable"
+	case assess.AggregateTLSCanceled:
+		return "Canceled"
+	default:
+		return string(agg)
+	}
+}
+
+func formatTLSAddressStatus(status assess.TLSAddressStatus) string {
+	switch status {
+	case assess.TLSAddrValid:
+		return "Valid"
+	case assess.TLSAddrHostnameMismatch:
+		return "Hostname mismatch"
+	case assess.TLSAddrUntrustedCertificate:
+		return "Certificate not trusted"
+	case assess.TLSAddrExpiredCertificate:
+		return "Certificate expired"
+	case assess.TLSAddrNotYetValid:
+		return "Certificate not yet valid"
+	case assess.TLSAddrHandshakeTimeout:
+		return "Timed out"
+	case assess.TLSAddrHandshakeFailed:
+		return "Failed"
+	case assess.TLSAddrConnectionClosed:
+		return "Connection closed"
+	case assess.TLSAddrCanceled:
+		return "Canceled"
+	case assess.TLSAddrError:
 		return "Error"
 	default:
 		return string(status)
