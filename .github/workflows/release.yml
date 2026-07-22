@@ -60,6 +60,7 @@ jobs:
 
       - name: Generate Artifact Attestations for Native Release Archives
         uses: actions/attest-build-provenance@v2
+        continue-on-error: true
         with:
           subject-path: |
             dist/*.tar.gz
