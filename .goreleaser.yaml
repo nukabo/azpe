@@ -63,3 +63,4 @@ release:
     name: azpe
   prerelease: auto
   mode: replace
+  replace_existing_artifacts: true
