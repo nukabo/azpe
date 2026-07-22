@@ -120,6 +120,9 @@ func TestRender_HTTP403_SimpleAndDetailed(t *testing.T) {
 	if !strings.Contains(detailsStr, "=== HTTP ===") {
 		t.Errorf("expected HTTP section in details, got: %s", detailsStr)
 	}
+	if !strings.Contains(detailsStr, "Resolver mode        Go built-in") {
+		t.Errorf("expected Resolver mode Go built-in in details, got: %s", detailsStr)
+	}
 	if !strings.Contains(detailsStr, "Status               Response received from all addresses") {
 		t.Errorf("expected Response received from all addresses in details, got: %s", detailsStr)
 	}
@@ -176,6 +179,11 @@ func TestRender_JSONAssertions_Phase5(t *testing.T) {
 	var parsed map[string]interface{}
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON output: %v", err)
+	}
+
+	dnsMap := parsed["dns"].(map[string]interface{})
+	if dnsMap["resolverMode"] != "GO_BUILTIN" {
+		t.Errorf("expected resolverMode GO_BUILTIN, got %v", dnsMap["resolverMode"])
 	}
 
 	httpMap := parsed["http"].(map[string]interface{})

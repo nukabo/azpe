@@ -48,6 +48,7 @@ func Resolve(ctx context.Context, resolver Resolver, tgt *target.Target) (model.
 
 		dnsObs := model.DNSObservation{
 			Status:                  assess.DNSStatusNotApplicable,
+			ResolverMode:            assess.ResolverModeGoBuiltin,
 			QueryHostname:           tgt.Hostname,
 			DurationMs:              duration,
 			Addresses:               []model.IPObservation{obs},
@@ -71,6 +72,7 @@ func Resolve(ctx context.Context, resolver Resolver, tgt *target.Target) (model.
 		status, errCat := categorizeDNSError(ctx, err)
 		dnsObs := model.DNSObservation{
 			Status:                  status,
+			ResolverMode:            assess.ResolverModeGoBuiltin,
 			QueryHostname:           tgt.Hostname,
 			DurationMs:              duration,
 			Addresses:               []model.IPObservation{},
@@ -111,6 +113,7 @@ func Resolve(ctx context.Context, resolver Resolver, tgt *target.Target) (model.
 
 	dnsObs := model.DNSObservation{
 		Status:                  assess.DNSStatusSuccess,
+		ResolverMode:            assess.ResolverModeGoBuiltin,
 		QueryHostname:           tgt.Hostname,
 		DurationMs:              duration,
 		Addresses:               ipObsList,
@@ -145,7 +148,6 @@ func deduplicateAndSort(addrs []netip.Addr) []netip.Addr {
 	seen := make(map[netip.Addr]bool)
 	var unique []netip.Addr
 	for _, a := range addrs {
-		// Normalize IPv4-mapped IPv6 if needed, but preserve standard netip behavior
 		unmapped := a.Unmap()
 		if !seen[unmapped] {
 			seen[unmapped] = true

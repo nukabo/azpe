@@ -100,6 +100,7 @@ func renderDetailedTerminal(w io.Writer, res *model.Result, useColor bool) error
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "Status               %s\n", formatDNSStatus(res.DNS.Status))
 	fmt.Fprintf(w, "Query hostname       %s\n", res.DNS.QueryHostname)
+	fmt.Fprintf(w, "Resolver mode        %s\n", formatResolverMode(res.DNS.ResolverMode))
 	fmt.Fprintf(w, "Resolution time      %d ms\n", res.DNS.DurationMs)
 	fmt.Fprintf(w, "Address result       %s\n", formatAggregateClassification(res.DNS.AggregateClassification))
 	if res.DNS.IsIPLiteral {
@@ -574,4 +575,15 @@ func formatDuration(ms int64) string {
 		return fmt.Sprintf("%.3f s", float64(ms)/1000.0)
 	}
 	return fmt.Sprintf("%d ms", ms)
+}
+
+func formatResolverMode(mode assess.DNSResolverMode) string {
+	switch mode {
+	case assess.ResolverModeGoBuiltin:
+		return "Go built-in"
+	case assess.ResolverModeOSNative:
+		return "OS native"
+	default:
+		return "Go built-in"
+	}
 }

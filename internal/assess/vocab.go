@@ -38,18 +38,28 @@ const (
 	DNSStatusSuccess          DNSStatus = "SUCCESS"
 	DNSStatusFailure          DNSStatus = "FAILURE"
 	DNSStatusNotApplicable    DNSStatus = "NOT_APPLICABLE"
-	DNSStatusTimeout          DNSStatus = "TIMEOUT"
 	DNSStatusNotFound         DNSStatus = "NOT_FOUND"
+	DNSStatusTimeout          DNSStatus = "TIMEOUT"
 	DNSStatusTemporaryFailure DNSStatus = "TEMPORARY_FAILURE"
-	DNSStatusSkipped          DNSStatus = "SKIPPED"
-	DNSStatusUnknown          DNSStatus = "UNKNOWN"
 )
 
 func (d DNSStatus) String() string {
 	return string(d)
 }
 
-// AddressClassification represents an individual IP address category.
+// DNSResolverMode indicates the resolver implementation path used by AZPE.
+type DNSResolverMode string
+
+const (
+	ResolverModeGoBuiltin DNSResolverMode = "GO_BUILTIN"
+	ResolverModeOSNative  DNSResolverMode = "OS_NATIVE"
+)
+
+func (r DNSResolverMode) String() string {
+	return string(r)
+}
+
+// AddressClassification represents the network classification of a single IP address.
 type AddressClassification string
 
 const (
@@ -69,7 +79,7 @@ func (a AddressClassification) String() string {
 	return string(a)
 }
 
-// AggregateClassification represents the combined classification of all resolved IP addresses.
+// AggregateClassification represents the aggregate classification of all resolved IP addresses.
 type AggregateClassification string
 
 const (
@@ -77,16 +87,38 @@ const (
 	AggregatePublicOnly         AggregateClassification = "PUBLIC_ONLY"
 	AggregateMixedPrivatePublic AggregateClassification = "MIXED_PRIVATE_PUBLIC"
 	AggregateSpecialOnly        AggregateClassification = "SPECIAL_ONLY"
-	AggregateMixed              AggregateClassification = "MIXED"
 	AggregateNone               AggregateClassification = "NONE"
-	AggregateUnknown            AggregateClassification = "UNKNOWN"
 )
 
 func (a AggregateClassification) String() string {
 	return string(a)
 }
 
-// TCPStatus represents the aggregate status of TCP connection tests.
+// TCPAddressStatus represents the TCP connection status for a single address.
+type TCPAddressStatus string
+
+const (
+	TCPAddrConnected        TCPAddressStatus = "CONNECTED"
+	TCPAddrTimedOut         TCPAddressStatus = "TIMED_OUT"
+	TCPAddrConnectionRefused TCPAddressStatus = "CONNECTION_REFUSED"
+	TCPAddrUnreachable      TCPAddressStatus = "UNREACHABLE"
+	TCPAddrCanceled         TCPAddressStatus = "CANCELED"
+	TCPAddrError            TCPAddressStatus = "ERROR"
+)
+
+// AggregateTCPStatus represents the aggregate TCP connectivity status across all probed addresses.
+type AggregateTCPStatus string
+
+const (
+	AggregateTCPAllConnected       AggregateTCPStatus = "ALL_CONNECTED"
+	AggregateTCPNoneConnected      AggregateTCPStatus = "NONE_CONNECTED"
+	AggregateTCPPartiallyConnected AggregateTCPStatus = "PARTIALLY_CONNECTED"
+	AggregateTCPNotAttempted       AggregateTCPStatus = "NOT_ATTEMPTED"
+	AggregateTCPNotApplicable      AggregateTCPStatus = "NOT_APPLICABLE"
+	AggregateTCPCanceled           AggregateTCPStatus = "CANCELED"
+)
+
+// TCPStatus represents the top-level TCP connectivity probe phase status.
 type TCPStatus string
 
 const (
@@ -97,60 +129,7 @@ const (
 	TCPStatusUnknown TCPStatus = "UNKNOWN"
 )
 
-func (t TCPStatus) String() string {
-	return string(t)
-}
-
-// TCPAddressStatus represents the TCP status of a single IP address.
-type TCPAddressStatus string
-
-const (
-	TCPAddrConnected         TCPAddressStatus = "CONNECTED"
-	TCPAddrConnectionRefused TCPAddressStatus = "REFUSED"
-	TCPAddrTimedOut          TCPAddressStatus = "TIMEOUT"
-	TCPAddrUnreachable       TCPAddressStatus = "UNREACHABLE"
-	TCPAddrCanceled          TCPAddressStatus = "CANCELED"
-	TCPAddrError             TCPAddressStatus = "ERROR"
-	TCPAddrSkipped           TCPAddressStatus = "SKIPPED"
-)
-
-func (t TCPAddressStatus) String() string {
-	return string(t)
-}
-
-// AggregateTCPStatus represents the overall aggregate status across all probed TCP addresses.
-type AggregateTCPStatus string
-
-const (
-	AggregateTCPAllConnected       AggregateTCPStatus = "ALL_CONNECTED"
-	AggregateTCPNoneConnected      AggregateTCPStatus = "NONE_CONNECTED"
-	AggregateTCPPartiallyConnected AggregateTCPStatus = "PARTIALLY_CONNECTED"
-	AggregateTCPNotAttempted       AggregateTCPStatus = "NOT_ATTEMPTED"
-	AggregateTCPNotApplicable      AggregateTCPStatus = "NOT_APPLICABLE"
-	AggregateTCPCanceled           AggregateTCPStatus = "CANCELED"
-	AggregateTCPUnknown            AggregateTCPStatus = "UNKNOWN"
-)
-
-func (a AggregateTCPStatus) String() string {
-	return string(a)
-}
-
-// TLSStatus represents the aggregate status of TLS validation.
-type TLSStatus string
-
-const (
-	TLSStatusSuccess TLSStatus = "SUCCESS"
-	TLSStatusFailed  TLSStatus = "FAILED"
-	TLSStatusPartial TLSStatus = "PARTIAL"
-	TLSStatusSkipped TLSStatus = "SKIPPED"
-	TLSStatusUnknown TLSStatus = "UNKNOWN"
-)
-
-func (t TLSStatus) String() string {
-	return string(t)
-}
-
-// TLSAddressStatus represents the TLS status of a single IP address.
+// TLSAddressStatus represents the TLS validation status for a single address.
 type TLSAddressStatus string
 
 const (
@@ -164,14 +143,9 @@ const (
 	TLSAddrConnectionClosed     TLSAddressStatus = "CONNECTION_CLOSED"
 	TLSAddrCanceled             TLSAddressStatus = "CANCELED"
 	TLSAddrError                TLSAddressStatus = "ERROR"
-	TLSAddrSkipped              TLSAddressStatus = "SKIPPED"
 )
 
-func (t TLSAddressStatus) String() string {
-	return string(t)
-}
-
-// AggregateTLSStatus represents the overall aggregate status across all TLS validation attempts.
+// AggregateTLSStatus represents the aggregate TLS status across all probed addresses.
 type AggregateTLSStatus string
 
 const (
@@ -181,29 +155,20 @@ const (
 	AggregateTLSNotAttempted   AggregateTLSStatus = "NOT_ATTEMPTED"
 	AggregateTLSNotApplicable  AggregateTLSStatus = "NOT_APPLICABLE"
 	AggregateTLSCanceled       AggregateTLSStatus = "CANCELED"
-	AggregateTLSUnknown        AggregateTLSStatus = "UNKNOWN"
 )
 
-func (a AggregateTLSStatus) String() string {
-	return string(a)
-}
-
-// HTTPStatus represents the overall result of the HTTP health request phase.
-type HTTPStatus string
+// TLSStatus represents the top-level TLS probe phase status.
+type TLSStatus string
 
 const (
-	HTTPStatusSuccess HTTPStatus = "SUCCESS"
-	HTTPStatusFailed  HTTPStatus = "FAILED"
-	HTTPStatusPartial HTTPStatus = "PARTIAL"
-	HTTPStatusSkipped HTTPStatus = "SKIPPED"
-	HTTPStatusUnknown HTTPStatus = "UNKNOWN"
+	TLSStatusSuccess TLSStatus = "SUCCESS"
+	TLSStatusFailed  TLSStatus = "FAILED"
+	TLSStatusPartial TLSStatus = "PARTIAL"
+	TLSStatusSkipped TLSStatus = "SKIPPED"
+	TLSStatusUnknown TLSStatus = "UNKNOWN"
 )
 
-func (h HTTPStatus) String() string {
-	return string(h)
-}
-
-// HTTPAddressStatus represents the HTTP operation status for a single IP address.
+// HTTPAddressStatus represents the HTTP request/response status for a single address.
 type HTTPAddressStatus string
 
 const (
@@ -215,37 +180,28 @@ const (
 	HTTPAddrConnectionClosed  HTTPAddressStatus = "CONNECTION_CLOSED"
 	HTTPAddrCanceled          HTTPAddressStatus = "CANCELED"
 	HTTPAddrError             HTTPAddressStatus = "ERROR"
-	HTTPAddrSkipped           HTTPAddressStatus = "SKIPPED"
 )
 
-func (h HTTPAddressStatus) String() string {
-	return string(h)
-}
-
-// HTTPResponseCategory categorizes the received HTTP status code.
+// HTTPResponseCategory categorizes numeric HTTP status codes into functional categories.
 type HTTPResponseCategory string
 
 const (
-	HTTPCatInformational          HTTPResponseCategory = "INFORMATIONAL"
 	HTTPCatSuccess                HTTPResponseCategory = "SUCCESS"
-	HTTPCatRedirection            HTTPResponseCategory = "REDIRECTION"
-	HTTPCatClientError            HTTPResponseCategory = "CLIENT_ERROR"
 	HTTPCatAuthenticationRequired HTTPResponseCategory = "AUTHENTICATION_REQUIRED"
 	HTTPCatAccessDenied           HTTPResponseCategory = "ACCESS_DENIED"
-	HTTPCatNotFound               HTTPResponseCategory = "NOT_FOUND"
-	HTTPCatMethodNotAllowed       HTTPResponseCategory = "METHOD_NOT_ALLOWED"
-	HTTPCatConflict               HTTPResponseCategory = "CONFLICT"
-	HTTPCatThrottled              HTTPResponseCategory = "THROTTLED"
-	HTTPCatServerError            HTTPResponseCategory = "SERVER_ERROR"
-	HTTPCatOtherResponse          HTTPResponseCategory = "OTHER_RESPONSE"
-	HTTPCatNoResponse             HTTPResponseCategory = "NO_RESPONSE"
+	HTTPCatNotFound              HTTPResponseCategory = "NOT_FOUND"
+	HTTPCatMethodNotAllowed      HTTPResponseCategory = "METHOD_NOT_ALLOWED"
+	HTTPCatConflict              HTTPResponseCategory = "CONFLICT"
+	HTTPCatThrottled             HTTPResponseCategory = "THROTTLED"
+	HTTPCatServerError           HTTPResponseCategory = "SERVER_ERROR"
+	HTTPCatRedirection           HTTPResponseCategory = "REDIRECTION"
+	HTTPCatClientError           HTTPResponseCategory = "CLIENT_ERROR"
+	HTTPCatInformational         HTTPResponseCategory = "INFORMATIONAL"
+	HTTPCatOtherResponse         HTTPResponseCategory = "OTHER_RESPONSE"
+	HTTPCatNoResponse            HTTPResponseCategory = "NO_RESPONSE"
 )
 
-func (h HTTPResponseCategory) String() string {
-	return string(h)
-}
-
-// AggregateHTTPStatus represents the overall aggregate status across all HTTP probes.
+// AggregateHTTPStatus represents the aggregate HTTP status across all probed addresses.
 type AggregateHTTPStatus string
 
 const (
@@ -258,6 +214,13 @@ const (
 	AggregateHTTPUnknown            AggregateHTTPStatus = "UNKNOWN"
 )
 
-func (a AggregateHTTPStatus) String() string {
-	return string(a)
-}
+// HTTPStatus represents the top-level HTTP probe phase status.
+type HTTPStatus string
+
+const (
+	HTTPStatusSuccess HTTPStatus = "SUCCESS"
+	HTTPStatusFailed  HTTPStatus = "FAILED"
+	HTTPStatusPartial HTTPStatus = "PARTIAL"
+	HTTPStatusSkipped HTTPStatus = "SKIPPED"
+	HTTPStatusUnknown HTTPStatus = "UNKNOWN"
+)

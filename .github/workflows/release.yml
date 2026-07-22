@@ -26,6 +26,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Validate Release Tag Format
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            if ! printf '%s' "${{ github.ref_name }}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
+              echo "Error: Invalid semantic version release tag format: '${{ github.ref_name }}'" >&2
+              echo "Release tags must follow semver format, e.g., v0.1.0 or v0.1.0-rc.1" >&2
+              exit 1
+            fi
+          fi
+
       - name: Set up Go
         uses: actions/setup-go@f111f37a573bc1f95242881341a470219a7745b4 # v5.3.0
         with:
@@ -49,6 +59,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate Artifact Attestations for Native Release Archives
-        uses: actions/attest-build-provenance@1c607ba993da3431613c23a54b38d33d997f7422 # v1.4.3
+        uses: actions/attest@5308206ea1c36391fb2757ad0a86c8a804702f23 # v4.0.0
         with:
-          subject-path: 'dist/*.tar.gz,dist/*.zip,dist/checksums.txt'
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt

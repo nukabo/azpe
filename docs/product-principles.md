@@ -7,6 +7,8 @@ AZPE is guided by ten core design principles that inform its architecture, CLI e
 ### 1. Run where the workload runs
 AZPE evaluates connectivity from inside the application's runtime environment (container, pod, VM, or local workstation). Observing network paths from the actual execution context is the only way to capture real DNS, routing, firewall, and proxy behaviors.
 
+*Note on Resolver Semantics*: AZPE uses Go's built-in pure-Go resolver behavior (`GO_BUILTIN`) in static Unix releases (`CGO_ENABLED=0`), which parses system DNS configuration files (`/etc/resolv.conf`, `/etc/hosts`, `/etc/nsswitch.conf`). Diagnostic output explicitly reports `Resolver mode: Go built-in` in `--details` and JSON (`"resolverMode": "GO_BUILTIN"`).
+
 ---
 
 ### 2. No Azure permission required by default

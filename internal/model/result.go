@@ -45,6 +45,7 @@ type IPObservation struct {
 // DNSObservation contains DNS resolution observations.
 type DNSObservation struct {
 	Status                  assess.DNSStatus               `json:"status"`
+	ResolverMode            assess.DNSResolverMode         `json:"resolverMode,omitempty"`
 	QueryHostname           string                         `json:"queryHostname,omitempty"`
 	DurationMs              int64                          `json:"durationMs"`
 	Addresses               []IPObservation                `json:"addresses"`

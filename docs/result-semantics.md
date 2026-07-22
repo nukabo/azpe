@@ -4,6 +4,23 @@ This document defines the vocabulary, assessment logic, target normalization rul
 
 ---
 
+## Operating-System DNS Resolution Semantics
+
+AZPE uses Go's platform resolver behavior (`dns.OSResolver`).
+
+> [!NOTE]
+> **DNS Resolver Mode (`GO_BUILTIN`)**:
+> In statically compiled Unix releases (`CGO_ENABLED=0`), name resolution uses Go's built-in pure-Go DNS resolver (which parses system configuration files such as `/etc/resolv.conf`, `/etc/hosts`, and `/etc/nsswitch.conf`) rather than invoking C/libc functions like `getaddrinfo`.
+>
+> In `--details` terminal output, AZPE reports:
+> `Resolver mode        Go built-in`
+> In JSON output (`schemaVersion: 1`), `dns` includes:
+> `"resolverMode": "GO_BUILTIN"`
+>
+> In typical workload environments (e.g. Linux containers, VMs, Kubernetes pods), Go's pure resolver produces identical DNS resolution results to standard system tools. In environments relying on custom C/NSS dynamic library modules or platform-specific macOS split-DNS, results should be compared against native system tools during initial workload validation.
+
+---
+
 ## Target Normalization
 
 AZPE normalizes input target strings into a consistent `Target` model containing:
@@ -79,7 +96,8 @@ All machine-readable output generated with `--json` contains top-level field `sc
 Current schema version: `1`.
 
 Key schema conventions in `schemaVersion: 1`:
-- `http` object includes `status`, `aggregateStatus`, `method`, `path`, `durationMs`, and `results` slice containing per-address observations (`address`, `version`, `classification`, `destination`, `port`, `serverName`, `host`, `method`, `requestUri`, `status`, `statusCode`, `statusText`, `responseCategory`, `durationMs`, `redirectFollowed`, `headers`, `bodyReadBytes`, `bodyTruncated`, `failureStage`, `errorCategory`, `error`).
+- `dns` object includes `status`, `resolverMode` (`GO_BUILTIN`), `queryHostname`, `durationMs`, `addresses`, `aggregateClassification`, `isIpLiteral`.
+- `http` object includes `status`, `aggregateStatus`, `method`, `path`, `durationMs`, and `results` slice containing per-address observations.
 - Unobserved/skipped phases omit optional fields or serialize `results: []`.
 - Slice properties (`errors`, `warnings`, `privateIps`, `publicIps`, `addresses`, `tcp.results`, `tls.results`, `http.results`) serialize as `[]` rather than `null`.
-- Machine enums (`WORKING`, `BROKEN`, `NOT_PRIVATE`, `UNKNOWN`, `ALL_RESPONDED`, `NONE_RESPONDED`, `PARTIALLY_RESPONDED`, `NOT_ATTEMPTED`) are preserved in JSON for automation.
+- Machine enums (`WORKING`, `BROKEN`, `NOT_PRIVATE`, `UNKNOWN`, `ALL_RESPONDED`, `NONE_RESPONDED`, `PARTIALLY_RESPONDED`, `NOT_ATTEMPTED`, `GO_BUILTIN`) are preserved in JSON for automation.
