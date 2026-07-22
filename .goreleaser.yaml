@@ -62,4 +62,4 @@ release:
     owner: nukabo
     name: azpe
   prerelease: auto
-  mode: keep-existing
+  mode: replace
