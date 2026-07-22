@@ -33,7 +33,7 @@ jobs:
 
       - name: Validate code formatting (gofmt)
         run: |
-          UNFORMATTED=$(gofmt -l cmd internal)
+          UNFORMATTED=$(gofmt -s -l cmd/ internal/)
           if [ -n "$UNFORMATTED" ]; then
             echo "The following files are not formatted with gofmt:"
             echo "$UNFORMATTED"
