@@ -118,10 +118,45 @@ func renderDetailedTerminal(w io.Writer, res *model.Result, useColor bool) error
 		fmt.Fprintln(w)
 	}
 
+	// Render TCP Connection details if performed
+	if res.TCP.AggregateStatus != assess.AggregateTCPNotAttempted && res.TCP.AggregateStatus != assess.AggregateTCPNotApplicable && res.TCP.AggregateStatus != "" {
+		fmt.Fprintln(w, sectionHeader("Connection"))
+		fmt.Fprintln(w)
+		fmt.Fprintf(w, "Status               %s\n", formatAggregateTCPStatus(res.TCP.AggregateStatus))
+		fmt.Fprintf(w, "Port                 %d\n", res.TCP.Port)
+		fmt.Fprintf(w, "Total duration       %s\n", formatDuration(res.TCP.DurationMs))
+		fmt.Fprintln(w)
+
+		if len(res.TCP.Results) > 0 {
+			fmt.Fprintln(w, "Results:")
+			for _, r := range res.TCP.Results {
+				fmt.Fprintf(w, "  - %s\n", r.Destination)
+				fmt.Fprintf(w, "    Status           %s\n", formatTCPAddressStatus(r.Status))
+				fmt.Fprintf(w, "    Duration         %s\n", formatDuration(r.DurationMs))
+				if r.ErrorCategory != "" {
+					fmt.Fprintf(w, "    Error category   %s\n", r.ErrorCategory)
+				}
+				if r.Error != "" {
+					fmt.Fprintf(w, "    Error            %s\n", r.Error)
+				}
+			}
+			fmt.Fprintln(w)
+		}
+	}
+
 	fmt.Fprintln(w, sectionHeader("Tests"))
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "DNS                  Completed")
-	fmt.Fprintln(w, "Connection           Not performed")
+	dnsTestStr := "Completed"
+	if res.DNS.Status == assess.DNSStatusFailure || res.DNS.Status == assess.DNSStatusNotFound || res.DNS.Status == assess.DNSStatusTimeout {
+		dnsTestStr = "Failed"
+	}
+	fmt.Fprintf(w, "DNS                  %s\n", dnsTestStr)
+
+	tcpTestStr := "Not performed"
+	if res.TCP.AggregateStatus != assess.AggregateTCPNotAttempted && res.TCP.AggregateStatus != assess.AggregateTCPNotApplicable && res.TCP.AggregateStatus != "" {
+		tcpTestStr = "Completed"
+	}
+	fmt.Fprintf(w, "Connection           %s\n", tcpTestStr)
 	fmt.Fprintln(w, "TLS                  Not performed")
 	fmt.Fprintln(w, "HTTP                 Not performed")
 	fmt.Fprintln(w)
@@ -166,11 +201,11 @@ func renderDetailedTerminal(w io.Writer, res *model.Result, useColor bool) error
 
 func getSymbolAndColor(scenario assess.AssessmentScenario) (string, string) {
 	switch scenario {
-	case assess.ScenarioPrivateDNSActive:
+	case assess.ScenarioPrivateDNSActive, assess.ScenarioPrivateTCPReachable:
 		return "✓", colorGreen
-	case assess.ScenarioPrivateDNSNotActive, assess.ScenarioDNSLookupFailed:
+	case assess.ScenarioPrivateDNSNotActive, assess.ScenarioDNSLookupFailed, assess.ScenarioPrivateTCPUnreachable:
 		return "✗", colorRed
-	case assess.ScenarioDNSMixed, assess.ScenarioSpecialOnly:
+	case assess.ScenarioDNSMixed, assess.ScenarioSpecialOnly, assess.ScenarioPrivateTCPPartial:
 		return "⚠", colorYellow
 	default:
 		return "", ""
@@ -249,4 +284,49 @@ func formatAddressClassification(cls assess.AddressClassification) string {
 	default:
 		return string(cls)
 	}
+}
+
+func formatAggregateTCPStatus(agg assess.AggregateTCPStatus) string {
+	switch agg {
+	case assess.AggregateTCPAllConnected:
+		return "All addresses connected"
+	case assess.AggregateTCPNoneConnected:
+		return "No addresses connected"
+	case assess.AggregateTCPPartiallyConnected:
+		return "Some addresses connected"
+	case assess.AggregateTCPNotAttempted:
+		return "Not attempted"
+	case assess.AggregateTCPNotApplicable:
+		return "Not applicable"
+	case assess.AggregateTCPCanceled:
+		return "Canceled"
+	default:
+		return string(agg)
+	}
+}
+
+func formatTCPAddressStatus(status assess.TCPAddressStatus) string {
+	switch status {
+	case assess.TCPAddrConnected:
+		return "Connected"
+	case assess.TCPAddrTimedOut:
+		return "Timed out"
+	case assess.TCPAddrConnectionRefused:
+		return "Connection refused"
+	case assess.TCPAddrUnreachable:
+		return "Unreachable"
+	case assess.TCPAddrCanceled:
+		return "Canceled"
+	case assess.TCPAddrError:
+		return "Error"
+	default:
+		return string(status)
+	}
+}
+
+func formatDuration(ms int64) string {
+	if ms >= 1000 {
+		return fmt.Sprintf("%.3f s", float64(ms)/1000.0)
+	}
+	return fmt.Sprintf("%d ms", ms)
 }

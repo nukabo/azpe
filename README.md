@@ -42,31 +42,34 @@ When an application cannot reach an Azure service, engineers commonly cannot dis
 > **No Control-Plane Claims**: AZPE observes connectivity from the workload's current execution environment without Azure control-plane access.
 > - An approved Azure Private Endpoint configuration in the Azure portal **does not prove workload connectivity** from your environment.
 > - Observing resolution to a private IP address is **evidence**, not formal proof, that the target is using private DNS.
+> - A successful TCP connection proves only that a port opened, not that TLS, authentication, or the service is healthy.
 > 
-> Therefore, AZPE will never claim `Private Endpoint verified`. It states: *Private DNS looks correct* or *This workload is not using private DNS*.
+> Therefore, AZPE will never claim `Private Endpoint verified`. It states: *Private connection is reachable*, *Private DNS looks correct*, or *This workload is not using private DNS*.
 
-## Current Status (Phase 2)
+## Current Status (Phase 3)
 
-Phase 2 implements:
+Phase 3 implements:
 - Operating-system DNS resolution using Go's standard library resolver.
 - Azure service hostname recognition catalogue (Key Vault, Storage, SQL, Cosmos DB, AI Search, OpenAI, ACR, App Configuration, Service Bus).
 - IP address classification across 10 categories (`PRIVATE`, `PUBLIC`, `LOOPBACK`, `LINK_LOCAL`, `UNSPECIFIED`, `MULTICAST`, `DOCUMENTATION`, `BENCHMARK`, `RESERVED`, `UNKNOWN`).
-- Address deduplication and deterministic IP ordering.
+- Direct TCP connectivity probing (`net.Dialer.DialContext`) directly against captured IP addresses and target ports without secondary DNS lookups.
+- Per-address TCP observation and latency measurement (`CONNECTED`, `REFUSED`, `TIMEOUT`, `UNREACHABLE`, `CANCELED`, `ERROR`).
 - Plain-language diagnostic assessments and exit code contracts:
-  - Exit `0`: Recognized Azure service hostname resolved exclusively to private addresses (`Private DNS looks correct`).
+  - Exit `0`: Recognized Azure service, private DNS active, all TCP connection probes succeeded (`✓ Private connection is reachable`).
   - Exit `2`: Invalid CLI usage or target syntax error.
-  - Exit `3`: DNS lookup failed for a recognized Azure service hostname (`The Azure service name cannot be resolved`).
-  - Exit `4`: Recognized Azure service hostname resolved exclusively to public addresses (`This workload is not using private DNS`).
-  - Exit `8`: Inconclusive / Not applicable (mixed DNS, special-purpose IPs, IP literal, unrecognized non-Azure target).
+  - Exit `3`: DNS lookup failed for a recognized Azure service hostname (`✗ The Azure service name cannot be resolved`).
+  - Exit `4`: Recognized Azure service hostname resolved exclusively to public addresses (`✗ This workload is not using private DNS`).
+  - Exit `5`: Recognized Azure service hostname resolved privately, but ALL TCP connection probes failed (`✗ The private address cannot be reached`).
+  - Exit `8`: Inconclusive / Partial (mixed DNS, partial TCP reachability, special-purpose IPs, IP literal, unrecognized non-Azure target).
   - Exit `10`: Unexpected internal error.
 
-*Note: TCP connectivity, TLS validation, and HTTP health probes remain untested in Phase 2 and are planned for subsequent phases.*
+*Note: TLS validation and HTTP health probes remain untested in Phase 3 and are planned for subsequent phases.*
 
 ## Planned v0.1 Roadmap
 
 - [x] Target parsing, result modeling, CLI routing, JSON & terminal rendering (Phase 1)
 - [x] Operating-system DNS resolution, target recognition & IP address classification (Phase 2)
-- [ ] TCP port probe & latency measurement (Phase 3)
+- [x] Direct TCP connectivity probing & per-address latency measurement (Phase 3)
 - [ ] TLS certificate verification & SNI validation (Phase 4)
 - [ ] Minimal HTTP HEAD/GET request & status code classification (Phase 5)
 

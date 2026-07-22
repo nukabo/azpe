@@ -64,12 +64,67 @@ type AddrObservation struct {
 	Note           string                         `json:"note,omitempty"`
 }
 
+// TCPResultItem represents a single TCP connection observation for an address.
+type TCPResultItem struct {
+	Address        string                       `json:"address"`
+	Version        string                       `json:"version"` // "IPv4" or "IPv6"
+	Classification assess.AddressClassification `json:"classification"`
+	Destination    string                       `json:"destination"` // "10.42.3.7:443" or "[fd00::7]:443"
+	Port           int                          `json:"port"`
+	Status         assess.TCPAddressStatus      `json:"status"`
+	DurationMs     int64                        `json:"durationMs"`
+	ErrorCategory  string                       `json:"errorCategory,omitempty"`
+	Error          string                       `json:"error,omitempty"`
+}
+
+func (r TCPResultItem) GetAddress() string {
+	return r.Address
+}
+
+func (r TCPResultItem) GetDestination() string {
+	return r.Destination
+}
+
+func (r TCPResultItem) GetPort() int {
+	return r.Port
+}
+
+func (r TCPResultItem) GetStatus() assess.TCPAddressStatus {
+	return r.Status
+}
+
+func (r TCPResultItem) GetDurationMs() int64 {
+	return r.DurationMs
+}
+
+func (r TCPResultItem) GetErrorCategory() string {
+	return r.ErrorCategory
+}
+
+func (r TCPResultItem) GetError() string {
+	return r.Error
+}
+
 // TCPObservation contains TCP connection test results.
 type TCPObservation struct {
-	Status    assess.TCPStatus `json:"status"`
-	Connected string           `json:"connectedAddress,omitempty"`
-	Port      int              `json:"port,omitempty"`
-	Note      string           `json:"note,omitempty"`
+	Status          assess.TCPStatus          `json:"status"`
+	AggregateStatus assess.AggregateTCPStatus `json:"aggregateStatus,omitempty"`
+	Port            int                       `json:"port,omitempty"`
+	DurationMs      int64                     `json:"durationMs"`
+	Results         []TCPResultItem           `json:"results"`
+	Note            string                    `json:"note,omitempty"`
+}
+
+func (t TCPObservation) GetAggregateStatus() assess.AggregateTCPStatus {
+	return t.AggregateStatus
+}
+
+func (t TCPObservation) GetResults() []assess.MinimalTCPResultItem {
+	var items []assess.MinimalTCPResultItem
+	for _, r := range t.Results {
+		items = append(items, r)
+	}
+	return items
 }
 
 // TLSObservation contains TLS certificate and handshake observations.
@@ -104,8 +159,8 @@ type AssessmentInfo struct {
 	NextAction  string                    `json:"nextAction,omitempty"`
 }
 
-// NewResultFromDNS evaluates the DNS observations and builds the Phase 2 diagnostic Result.
-func NewResultFromDNS(tgt *target.Target, startTime time.Time, dnsObs DNSObservation, addrObs AddrObservation) *Result {
+// NewResultFromDNSAndTCP evaluates DNS and TCP observations and builds the diagnostic Result.
+func NewResultFromDNSAndTCP(tgt *target.Target, startTime time.Time, dnsObs DNSObservation, addrObs AddrObservation, tcpObs TCPObservation) *Result {
 	hostname, _ := os.Hostname()
 	duration := time.Since(startTime).Milliseconds()
 
@@ -117,11 +172,16 @@ func NewResultFromDNS(tgt *target.Target, startTime time.Time, dnsObs DNSObserva
 		classList = append(classList, ipObs.Classification)
 	}
 
-	eval := assess.Evaluate(tgt, dnsObs.Status, addrObs.Classification, addrsList, classList, dnsObs.ErrorCategory, dnsObs.ErrorMessage)
+	eval := assess.Evaluate(tgt, dnsObs.Status, addrObs.Classification, addrsList, classList, dnsObs.ErrorCategory, dnsObs.ErrorMessage, tcpObs)
 
 	errorsList := []string{}
 	if dnsObs.ErrorMessage != "" && eval.Scenario == assess.ScenarioDNSLookupFailed {
 		errorsList = append(errorsList, dnsObs.ErrorMessage)
+	}
+	for _, tcpRes := range tcpObs.Results {
+		if tcpRes.Error != "" {
+			errorsList = append(errorsList, tcpRes.Error)
+		}
 	}
 
 	warningsList := []string{}
@@ -142,6 +202,9 @@ func NewResultFromDNS(tgt *target.Target, startTime time.Time, dnsObs DNSObserva
 	if addrObs.PublicIPs == nil {
 		addrObs.PublicIPs = []string{}
 	}
+	if tcpObs.Results == nil {
+		tcpObs.Results = []TCPResultItem{}
+	}
 
 	return &Result{
 		SchemaVersion: version.SchemaVersion,
@@ -156,17 +219,14 @@ func NewResultFromDNS(tgt *target.Target, startTime time.Time, dnsObs DNSObserva
 		},
 		DNS:     dnsObs,
 		Address: addrObs,
-		TCP: TCPObservation{
-			Status: assess.TCPStatusSkipped,
-			Note:   "TCP connectivity probe not implemented in Phase 2",
-		},
+		TCP:     tcpObs,
 		TLS: TLSObservation{
 			Status: assess.TLSStatusSkipped,
-			Note:   "TLS validation not implemented in Phase 2",
+			Note:   "TLS validation not implemented in Phase 3",
 		},
 		HTTP: HTTPObservation{
 			Status: assess.HTTPStatusSkipped,
-			Note:   "HTTP request not implemented in Phase 2",
+			Note:   "HTTP request not implemented in Phase 3",
 		},
 		Assessment: AssessmentInfo{
 			Scenario:    eval.Scenario,
@@ -181,4 +241,15 @@ func NewResultFromDNS(tgt *target.Target, startTime time.Time, dnsObs DNSObserva
 		Errors:   errorsList,
 		Warnings: warningsList,
 	}
+}
+
+// NewResultFromDNS evaluates DNS observations without TCP probing (for compatibility/helper).
+func NewResultFromDNS(tgt *target.Target, startTime time.Time, dnsObs DNSObservation, addrObs AddrObservation) *Result {
+	tcpObs := TCPObservation{
+		Status:          assess.TCPStatusSkipped,
+		AggregateStatus: assess.AggregateTCPNotAttempted,
+		Results:         []TCPResultItem{},
+		Note:            "TCP connectivity probe not performed",
+	}
+	return NewResultFromDNSAndTCP(tgt, startTime, dnsObs, addrObs, tcpObs)
 }

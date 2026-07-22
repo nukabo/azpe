@@ -84,20 +84,53 @@ func (a AggregateClassification) String() string {
 	return string(a)
 }
 
-// TCPStatus represents the result of TCP connection attempts.
+// TCPStatus represents the aggregate status of TCP connection tests.
 type TCPStatus string
 
 const (
-	TCPStatusConnected         TCPStatus = "CONNECTED"
-	TCPStatusConnectionRefused TCPStatus = "CONNECTION_REFUSED"
-	TCPStatusTimedOut          TCPStatus = "TIMED_OUT"
-	TCPStatusUnreachable       TCPStatus = "UNREACHABLE"
-	TCPStatusSkipped           TCPStatus = "SKIPPED"
-	TCPStatusUnknown           TCPStatus = "UNKNOWN"
+	TCPStatusSuccess TCPStatus = "SUCCESS"
+	TCPStatusFailed  TCPStatus = "FAILED"
+	TCPStatusPartial TCPStatus = "PARTIAL"
+	TCPStatusSkipped TCPStatus = "SKIPPED"
+	TCPStatusUnknown TCPStatus = "UNKNOWN"
 )
 
 func (t TCPStatus) String() string {
 	return string(t)
+}
+
+// TCPAddressStatus represents the TCP status of a single IP address.
+type TCPAddressStatus string
+
+const (
+	TCPAddrConnected         TCPAddressStatus = "CONNECTED"
+	TCPAddrConnectionRefused TCPAddressStatus = "REFUSED"
+	TCPAddrTimedOut          TCPAddressStatus = "TIMEOUT"
+	TCPAddrUnreachable       TCPAddressStatus = "UNREACHABLE"
+	TCPAddrCanceled          TCPAddressStatus = "CANCELED"
+	TCPAddrError             TCPAddressStatus = "ERROR"
+	TCPAddrSkipped           TCPAddressStatus = "SKIPPED"
+)
+
+func (t TCPAddressStatus) String() string {
+	return string(t)
+}
+
+// AggregateTCPStatus represents the overall aggregate status across all probed TCP addresses.
+type AggregateTCPStatus string
+
+const (
+	AggregateTCPAllConnected       AggregateTCPStatus = "ALL_CONNECTED"
+	AggregateTCPNoneConnected      AggregateTCPStatus = "NONE_CONNECTED"
+	AggregateTCPPartiallyConnected AggregateTCPStatus = "PARTIALLY_CONNECTED"
+	AggregateTCPNotAttempted       AggregateTCPStatus = "NOT_ATTEMPTED"
+	AggregateTCPNotApplicable      AggregateTCPStatus = "NOT_APPLICABLE"
+	AggregateTCPCanceled           AggregateTCPStatus = "CANCELED"
+	AggregateTCPUnknown            AggregateTCPStatus = "UNKNOWN"
+)
+
+func (a AggregateTCPStatus) String() string {
+	return string(a)
 }
 
 // TLSStatus represents the result of TLS validation.

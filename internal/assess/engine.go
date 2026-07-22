@@ -19,6 +19,11 @@ const (
 	ScenarioUnrecognizedTarget  AssessmentScenario = "UNRECOGNIZED_TARGET"
 	ScenarioPossibleAzure       AssessmentScenario = "POSSIBLE_AZURE"
 	ScenarioSpecialOnly         AssessmentScenario = "SPECIAL_ONLY"
+
+	// Phase 3 TCP Scenarios
+	ScenarioPrivateTCPReachable   AssessmentScenario = "PRIVATE_TCP_REACHABLE"
+	ScenarioPrivateTCPUnreachable AssessmentScenario = "PRIVATE_TCP_UNREACHABLE"
+	ScenarioPrivateTCPPartial     AssessmentScenario = "PRIVATE_TCP_PARTIAL"
 )
 
 // Evaluation represents the structured outcome of the assessment decision engine.
@@ -35,8 +40,25 @@ type Evaluation struct {
 	Warnings    []string
 }
 
-// Evaluate determines the Assessment result and UX scenario from target and DNS observations.
-func Evaluate(tgt *target.Target, dnsStatus DNSStatus, aggClass AggregateClassification, addresses []string, classifications []AddressClassification, errCat, errMsg string) Evaluation {
+// MinimalTCPObservation contains fields required for Evaluation without importing model package.
+type MinimalTCPObservation interface {
+	GetAggregateStatus() AggregateTCPStatus
+	GetResults() []MinimalTCPResultItem
+}
+
+// MinimalTCPResultItem interface for per-address TCP result details.
+type MinimalTCPResultItem interface {
+	GetAddress() string
+	GetDestination() string
+	GetPort() int
+	GetStatus() TCPAddressStatus
+	GetDurationMs() int64
+	GetErrorCategory() string
+	GetError() string
+}
+
+// Evaluate determines the Assessment result and UX scenario from target, DNS, and TCP observations.
+func Evaluate(tgt *target.Target, dnsStatus DNSStatus, aggClass AggregateClassification, addresses []string, classifications []AddressClassification, errCat, errMsg string, tcpObs MinimalTCPObservation) Evaluation {
 	// 1. IP Literal Target
 	if tgt.TargetType == target.TargetTypeIPLiteral {
 		ex := "An IP address was provided instead of an Azure service hostname."
@@ -116,6 +138,100 @@ func Evaluate(tgt *target.Target, dnsStatus DNSStatus, aggClass AggregateClassif
 
 	switch aggClass {
 	case AggregatePrivateOnly:
+		// Check TCP Probing Results for Private-Only DNS
+		if tcpObs != nil && tcpObs.GetAggregateStatus() != AggregateTCPNotAttempted && tcpObs.GetAggregateStatus() != AggregateTCPNotApplicable {
+			switch tcpObs.GetAggregateStatus() {
+			case AggregateTCPAllConnected:
+				title := "Private connection is reachable"
+				if len(tcpObs.GetResults()) > 1 {
+					title = "Private connections are reachable"
+				}
+				var lines []string
+				for _, r := range tcpObs.GetResults() {
+					lines = append(lines, fmt.Sprintf("%s → %s", tgt.Hostname, r.GetDestination()))
+				}
+				destBlock := strings.Join(lines, "\n")
+				connStatusStr := "Working"
+				if len(tcpObs.GetResults()) > 1 {
+					connStatusStr = "Working for all addresses"
+				}
+				ex := "The Azure service hostname resolved privately, and this workload established a TCP connection to every returned private address."
+				imp := "DNS and TCP connectivity look correct. TLS and the service response remain untested."
+				sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      %s\n\nSecure connection and service response not tested yet.", destBlock, connStatusStr)
+				return Evaluation{
+					Scenario:    ScenarioPrivateTCPReachable,
+					ExitCode:    0,
+					Title:       title,
+					Explanation: ex,
+					Impact:      imp,
+					Summary:     sum,
+					State:       AssessmentWorking,
+					LikelyOwner: OwnerUnknown,
+					NextAction:  "",
+				}
+
+			case AggregateTCPNoneConnected:
+				title := "The private address cannot be reached"
+				if len(tcpObs.GetResults()) > 1 {
+					title = "The private addresses cannot be reached"
+				}
+				var lines []string
+				for _, r := range tcpObs.GetResults() {
+					failReason := formatTCPFailureReason(r.GetStatus(), r.GetErrorCategory())
+					if len(tcpObs.GetResults()) == 1 {
+						lines = append(lines, fmt.Sprintf("%s → %s\nResult: %s", tgt.Hostname, r.GetDestination(), failReason))
+					} else {
+						lines = append(lines, fmt.Sprintf("%-18s %s", r.GetDestination(), formatShortTCPFailure(r.GetStatus())))
+					}
+				}
+				destBlock := strings.Join(lines, "\n")
+				connStatusStr := "Failed"
+				if len(tcpObs.GetResults()) > 1 {
+					connStatusStr = "Failed for all addresses"
+				}
+				ex := "The Azure service hostname resolved privately, but this workload could not establish a TCP connection to the returned address."
+				imp := "The application cannot currently connect to the Azure service on the requested port."
+				sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      %s\n\nWhat to do:\nSend this result to your network team.", destBlock, connStatusStr)
+				return Evaluation{
+					Scenario:    ScenarioPrivateTCPUnreachable,
+					ExitCode:    5,
+					Title:       title,
+					Explanation: ex,
+					Impact:      imp,
+					Summary:     sum,
+					State:       AssessmentBroken,
+					LikelyOwner: OwnerNetwork,
+					NextAction:  "Send this result to your network team.",
+				}
+
+			case AggregateTCPPartiallyConnected:
+				var lines []string
+				for _, r := range tcpObs.GetResults() {
+					if r.GetStatus() == TCPAddrConnected {
+						lines = append(lines, fmt.Sprintf("%-18s connected in %d ms", r.GetDestination(), r.GetDurationMs()))
+					} else {
+						lines = append(lines, fmt.Sprintf("%-18s %s", r.GetDestination(), formatShortTCPFailure(r.GetStatus())))
+					}
+				}
+				destBlock := strings.Join(lines, "\n")
+				ex := "At least one returned private address accepted the TCP connection and at least one did not."
+				imp := "The application may behave intermittently depending on which address it selects."
+				sum := fmt.Sprintf("%s\n\nThe application may work intermittently depending on which address it uses.\n\nWhat to do:\nSend this result to your network team.", destBlock)
+				return Evaluation{
+					Scenario:    ScenarioPrivateTCPPartial,
+					ExitCode:    8,
+					Title:       "Some private addresses cannot be reached",
+					Explanation: ex,
+					Impact:      imp,
+					Summary:     sum,
+					State:       AssessmentUnknown,
+					LikelyOwner: OwnerNetwork,
+					NextAction:  "Send this result to your network team.",
+				}
+			}
+		}
+
+		// Phase 2 fallback or untested TCP
 		var lines []string
 		for _, addr := range addresses {
 			lines = append(lines, fmt.Sprintf("%s → %s (private)", tgt.Hostname, addr))
@@ -282,5 +398,35 @@ func formatAddressClassificationLabel(cls AddressClassification) string {
 		return "reserved"
 	default:
 		return "unknown"
+	}
+}
+
+func formatTCPFailureReason(status TCPAddressStatus, errCat string) string {
+	switch status {
+	case TCPAddrTimedOut:
+		return "connection timed out"
+	case TCPAddrConnectionRefused:
+		return "connection refused"
+	case TCPAddrUnreachable:
+		return "network or host unreachable"
+	case TCPAddrCanceled:
+		return "connection canceled"
+	default:
+		return "connection failed"
+	}
+}
+
+func formatShortTCPFailure(status TCPAddressStatus) string {
+	switch status {
+	case TCPAddrTimedOut:
+		return "timed out"
+	case TCPAddrConnectionRefused:
+		return "connection refused"
+	case TCPAddrUnreachable:
+		return "unreachable"
+	case TCPAddrCanceled:
+		return "canceled"
+	default:
+		return "failed"
 	}
 }

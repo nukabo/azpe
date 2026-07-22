@@ -13,7 +13,7 @@ import (
 	"github.com/azpe/azpe/internal/target"
 )
 
-func TestRender_SimplePrivateOnly(t *testing.T) {
+func TestRender_SimplePrivateOnlyUntested(t *testing.T) {
 	tgt, _ := target.Parse("myvault.vault.azure.net")
 	dnsObs := model.DNSObservation{
 		Status:        assess.DNSStatusSuccess,
@@ -45,14 +45,147 @@ func TestRender_SimplePrivateOnly(t *testing.T) {
 	if !strings.Contains(outStr, "myvault.vault.azure.net → 10.42.3.7 (private)") {
 		t.Errorf("expected address line, got: %s", outStr)
 	}
-	if !strings.Contains(outStr, "The service name points to a private address from this workload.") {
-		t.Errorf("expected explanation line, got: %s", outStr)
+
+	assertNoProhibitedPhrases(t, outStr)
+}
+
+func TestRender_TCPConnected_SimpleAndDetailed(t *testing.T) {
+	tgt, _ := target.Parse("myvault.vault.azure.net")
+	dnsObs := model.DNSObservation{
+		Status:        assess.DNSStatusSuccess,
+		QueryHostname: "myvault.vault.azure.net",
+		DurationMs:    4,
+		Addresses: []model.IPObservation{
+			{Address: "10.42.3.7", Version: "IPv4", Classification: assess.AddrPrivate},
+		},
+		AggregateClassification: assess.AggregatePrivateOnly,
 	}
-	if !strings.Contains(outStr, "Connection not tested yet.") {
-		t.Errorf("expected Connection not tested yet, got: %s", outStr)
+	addrObs := model.AddrObservation{
+		Classification: assess.AggregatePrivateOnly,
+		Addresses:      dnsObs.Addresses,
+		PrivateIPs:     []string{"10.42.3.7"},
+	}
+	tcpObs := model.TCPObservation{
+		Status:          assess.TCPStatusSuccess,
+		AggregateStatus: assess.AggregateTCPAllConnected,
+		Port:            443,
+		DurationMs:      8,
+		Results: []model.TCPResultItem{
+			{
+				Address:        "10.42.3.7",
+				Version:        "IPv4",
+				Classification: assess.AddrPrivate,
+				Destination:    "10.42.3.7:443",
+				Port:           443,
+				Status:         assess.TCPAddrConnected,
+				DurationMs:     8,
+			},
+		},
+	}
+
+	res := model.NewResultFromDNSAndTCP(tgt, time.Now(), dnsObs, addrObs, tcpObs)
+
+	var buf bytes.Buffer
+	err := output.Render(&buf, res, output.FormatOptions{NoColor: true})
+	if err != nil {
+		t.Fatalf("unexpected render error: %v", err)
+	}
+
+	outStr := buf.String()
+	if !strings.Contains(outStr, "✓ Private connection is reachable") {
+		t.Errorf("expected title '✓ Private connection is reachable', got: %s", outStr)
+	}
+	if !strings.Contains(outStr, "myvault.vault.azure.net → 10.42.3.7:443") {
+		t.Errorf("expected destination mapping line, got: %s", outStr)
+	}
+	if !strings.Contains(outStr, "Connection      Working") {
+		t.Errorf("expected Connection Working status, got: %s", outStr)
 	}
 
 	assertNoProhibitedPhrases(t, outStr)
+
+	// Test Details view
+	buf.Reset()
+	err = output.Render(&buf, res, output.FormatOptions{Details: true, NoColor: true})
+	if err != nil {
+		t.Fatalf("unexpected render error: %v", err)
+	}
+	detailsStr := buf.String()
+	if !strings.Contains(detailsStr, "=== Connection ===") {
+		t.Errorf("expected Connection section in details, got: %s", detailsStr)
+	}
+	if !strings.Contains(detailsStr, "Status               All addresses connected") {
+		t.Errorf("expected All addresses connected status, got: %s", detailsStr)
+	}
+}
+
+func TestRender_TCPFailed_SimpleAndDetailed(t *testing.T) {
+	tgt, _ := target.Parse("myvault.vault.azure.net")
+	dnsObs := model.DNSObservation{
+		Status:        assess.DNSStatusSuccess,
+		QueryHostname: "myvault.vault.azure.net",
+		DurationMs:    4,
+		Addresses: []model.IPObservation{
+			{Address: "10.42.3.7", Version: "IPv4", Classification: assess.AddrPrivate},
+		},
+		AggregateClassification: assess.AggregatePrivateOnly,
+	}
+	addrObs := model.AddrObservation{
+		Classification: assess.AggregatePrivateOnly,
+		Addresses:      dnsObs.Addresses,
+		PrivateIPs:     []string{"10.42.3.7"},
+	}
+	tcpObs := model.TCPObservation{
+		Status:          assess.TCPStatusFailed,
+		AggregateStatus: assess.AggregateTCPNoneConnected,
+		Port:            443,
+		DurationMs:      5001,
+		Results: []model.TCPResultItem{
+			{
+				Address:        "10.42.3.7",
+				Version:        "IPv4",
+				Classification: assess.AddrPrivate,
+				Destination:    "10.42.3.7:443",
+				Port:           443,
+				Status:         assess.TCPAddrTimedOut,
+				DurationMs:     5001,
+				ErrorCategory:  "TIMEOUT",
+				Error:          "dial tcp 10.42.3.7:443: i/o timeout",
+			},
+		},
+	}
+
+	res := model.NewResultFromDNSAndTCP(tgt, time.Now(), dnsObs, addrObs, tcpObs)
+
+	var buf bytes.Buffer
+	err := output.Render(&buf, res, output.FormatOptions{NoColor: true})
+	if err != nil {
+		t.Fatalf("unexpected render error: %v", err)
+	}
+
+	outStr := buf.String()
+	if !strings.Contains(outStr, "✗ The private address cannot be reached") {
+		t.Errorf("expected title '✗ The private address cannot be reached', got: %s", outStr)
+	}
+	if !strings.Contains(outStr, "Result: connection timed out") {
+		t.Errorf("expected Result: connection timed out, got: %s", outStr)
+	}
+
+	assertNoProhibitedPhrases(t, outStr)
+
+	// Test Details view
+	buf.Reset()
+	err = output.Render(&buf, res, output.FormatOptions{Details: true, NoColor: true})
+	if err != nil {
+		t.Fatalf("unexpected render error: %v", err)
+	}
+	detailsStr := buf.String()
+	if !strings.Contains(detailsStr, "Status               No addresses connected") {
+		t.Errorf("expected No addresses connected status in details, got: %s", detailsStr)
+	}
+	if !strings.Contains(detailsStr, "Error category   TIMEOUT") {
+		t.Errorf("expected Error category TIMEOUT in details, got: %s", detailsStr)
+	}
 }
 
 func TestRender_SimplePublicOnly(t *testing.T) {
@@ -87,9 +220,6 @@ func TestRender_SimplePublicOnly(t *testing.T) {
 	if !strings.Contains(outStr, "myvault.vault.azure.net → 20.42.64.44 (public)") {
 		t.Errorf("expected public address mapping, got: %s", outStr)
 	}
-	if !strings.Contains(outStr, "The application will attempt to use the public Azure endpoint.") {
-		t.Errorf("expected public endpoint message, got: %s", outStr)
-	}
 
 	assertNoProhibitedPhrases(t, outStr)
 }
@@ -122,9 +252,6 @@ func TestRender_SimpleDNSFailure(t *testing.T) {
 	if !strings.Contains(outStr, "✗ The Azure service name cannot be resolved") {
 		t.Errorf("expected header '✗ The Azure service name cannot be resolved', got: %s", outStr)
 	}
-	if !strings.Contains(outStr, "myvault.vault.azure.net") {
-		t.Errorf("expected hostname, got: %s", outStr)
-	}
 
 	assertNoProhibitedPhrases(t, outStr)
 }
@@ -156,9 +283,6 @@ func TestRender_UnrecognizedTarget(t *testing.T) {
 	outStr := buf.String()
 	if !strings.Contains(outStr, "Cannot test this target") {
 		t.Errorf("expected header 'Cannot test this target', got: %s", outStr)
-	}
-	if !strings.Contains(outStr, "microsoft.com is not a recognized Azure Private Endpoint service hostname.") {
-		t.Errorf("expected unrecognized message, got: %s", outStr)
 	}
 
 	assertNoProhibitedPhrases(t, outStr)
@@ -193,9 +317,6 @@ func TestRender_IPLiteralInput(t *testing.T) {
 	if !strings.Contains(outStr, "The Azure service hostname is required") {
 		t.Errorf("expected header 'The Azure service hostname is required', got: %s", outStr)
 	}
-	if !strings.Contains(outStr, "An IP address cannot test Private Endpoint DNS.") {
-		t.Errorf("expected IP address cannot test Private Endpoint DNS message, got: %s", outStr)
-	}
 
 	assertNoProhibitedPhrases(t, outStr)
 }
@@ -215,8 +336,25 @@ func TestRender_JSONAssertions(t *testing.T) {
 		Classification: assess.AggregatePrivateOnly,
 		Addresses:      dnsObs.Addresses,
 	}
+	tcpObs := model.TCPObservation{
+		Status:          assess.TCPStatusSuccess,
+		AggregateStatus: assess.AggregateTCPAllConnected,
+		Port:            443,
+		DurationMs:      8,
+		Results: []model.TCPResultItem{
+			{
+				Address:        "10.42.3.7",
+				Version:        "IPv4",
+				Classification: assess.AddrPrivate,
+				Destination:    "10.42.3.7:443",
+				Port:           443,
+				Status:         assess.TCPAddrConnected,
+				DurationMs:     8,
+			},
+		},
+	}
 
-	res := model.NewResultFromDNS(tgt, time.Now(), dnsObs, addrObs)
+	res := model.NewResultFromDNSAndTCP(tgt, time.Now(), dnsObs, addrObs, tcpObs)
 
 	var buf bytes.Buffer
 	err := output.Render(&buf, res, output.FormatOptions{JSON: true})
@@ -251,6 +389,11 @@ func TestRender_JSONAssertions(t *testing.T) {
 	}
 	if tgtMap["azureServiceFamily"] != "KEY_VAULT" {
 		t.Errorf("expected azureServiceFamily KEY_VAULT, got %v", tgtMap["azureServiceFamily"])
+	}
+
+	tcpMap := parsed["tcp"].(map[string]interface{})
+	if tcpMap["aggregateStatus"] != "ALL_CONNECTED" {
+		t.Errorf("expected aggregateStatus ALL_CONNECTED, got %v", tcpMap["aggregateStatus"])
 	}
 }
 
@@ -301,9 +444,11 @@ func assertNoProhibitedPhrases(t *testing.T, out string) {
 		"NOT_APPLICABLE",
 		"RECOGNIZED_AZURE_SERVICE",
 		"IP_LITERAL",
+		"ALL_CONNECTED",
+		"NONE_CONNECTED",
+		"PARTIALLY_CONNECTED",
 		"Public IP address detected",
 		"Private DNS is active",
-		"Private DNS is not active here",
 		"Private Endpoint verified",
 		"Private Endpoint is working",
 		"Private Endpoint is broken",

@@ -13,17 +13,23 @@ import (
 	"github.com/azpe/azpe/internal/model"
 	"github.com/azpe/azpe/internal/output"
 	"github.com/azpe/azpe/internal/target"
+	"github.com/azpe/azpe/internal/tcp"
 	"github.com/azpe/azpe/internal/version"
 )
 
 // Run executes the CLI logic with the provided argument list and writers.
 // Returns an exit code suitable for os.Exit.
 func Run(args []string, stdout, stderr io.Writer) int {
-	return RunWithResolver(args, stdout, stderr, &dns.OSResolver{})
+	return RunWithResolverAndProber(args, stdout, stderr, &dns.OSResolver{}, &tcp.OSTCPProber{})
 }
 
 // RunWithResolver executes the CLI logic using a custom DNS resolver (useful for testing).
 func RunWithResolver(args []string, stdout, stderr io.Writer, resolver dns.Resolver) int {
+	return RunWithResolverAndProber(args, stdout, stderr, resolver, &tcp.OSTCPProber{})
+}
+
+// RunWithResolverAndProber executes the CLI logic using a custom DNS resolver and TCP prober (useful for testing).
+func RunWithResolverAndProber(args []string, stdout, stderr io.Writer, resolver dns.Resolver, prober tcp.Prober) int {
 	if len(args) == 0 {
 		printHelp(stdout)
 		return ExitSuccess
@@ -39,7 +45,7 @@ func RunWithResolver(args []string, stdout, stderr io.Writer, resolver dns.Resol
 		printVersion(stdout)
 		return ExitSuccess
 	case "probe":
-		return runProbe(args[1:], stdout, stderr, resolver)
+		return runProbe(args[1:], stdout, stderr, resolver, prober)
 	default:
 		if subcommand == "-h" || subcommand == "--help" {
 			printHelp(stdout)
@@ -91,7 +97,7 @@ func printVersion(w io.Writer) {
 	fmt.Fprintf(w, "AZPE version %s (JSON schema v%d)\n", version.Version, version.SchemaVersion)
 }
 
-func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver) int {
+func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver, prober tcp.Prober) int {
 	fs := flag.NewFlagSet("probe", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
@@ -143,7 +149,21 @@ func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver) in
 
 	dnsObs, addrObs := dns.Resolve(ctx, resolver, tgt)
 
-	res := model.NewResultFromDNS(tgt, startTime, dnsObs, addrObs)
+	var tcpObs model.TCPObservation
+	if tgt.TargetType == target.TargetTypeRecognizedAzure && dnsObs.Status == assess.DNSStatusSuccess && addrObs.Classification == assess.AggregatePrivateOnly {
+		tcpObs = tcp.ProbeAll(ctx, prober, dnsObs.Addresses, tgt.Port)
+	} else {
+		tcpObs = model.TCPObservation{
+			Status:          assess.TCPStatusSkipped,
+			AggregateStatus: assess.AggregateTCPNotAttempted,
+			Port:            tgt.Port,
+			DurationMs:      0,
+			Results:         []model.TCPResultItem{},
+			Note:            "TCP connectivity probe not performed",
+		}
+	}
+
+	res := model.NewResultFromDNSAndTCP(tgt, startTime, dnsObs, addrObs, tcpObs)
 
 	opts := output.FormatOptions{
 		JSON:    *jsonFlag,
@@ -157,24 +177,20 @@ func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver) in
 	}
 
 	// Exit Code Mapping based on scenario / evaluation
-	switch tgt.TargetType {
-	case target.TargetTypeIPLiteral, target.TargetTypeUnrecognized, target.TargetTypePossibleAzure:
+	switch res.Assessment.Scenario {
+	case assess.ScenarioPrivateTCPReachable:
+		return ExitSuccess // Exit code 0
+	case assess.ScenarioPrivateTCPUnreachable:
+		return ExitTCPFailure // Exit code 5
+	case assess.ScenarioPrivateTCPPartial:
 		return ExitInconclusive // Exit code 8
-	case target.TargetTypeRecognizedAzure:
-		switch dnsObs.Status {
-		case assess.DNSStatusNotFound, assess.DNSStatusTimeout, assess.DNSStatusTemporaryFailure, assess.DNSStatusFailure:
-			return ExitDNSFailure // Exit code 3
-		}
-
-		switch addrObs.Classification {
-		case assess.AggregatePrivateOnly:
-			return ExitSuccess // Exit code 0
-		case assess.AggregatePublicOnly:
-			return ExitNotPrivate // Exit code 4
-		default:
-			return ExitInconclusive // Exit code 8 for mixed or special
-		}
+	case assess.ScenarioPrivateDNSActive:
+		return ExitSuccess // Exit code 0
+	case assess.ScenarioPrivateDNSNotActive:
+		return ExitNotPrivate // Exit code 4
+	case assess.ScenarioDNSLookupFailed:
+		return ExitDNSFailure // Exit code 3
 	default:
-		return ExitInconclusive
+		return ExitInconclusive // Exit code 8 for mixed, special, literal, unrecognized, etc.
 	}
 }
