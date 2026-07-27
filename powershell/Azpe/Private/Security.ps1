@@ -91,6 +91,4 @@ function Test-AzpeSafeInput {
     if ($RawInput -match '://[^/]*@') {
         throw "URLs containing embedded credentials are not allowed"
     }
-
-    return $true
 }

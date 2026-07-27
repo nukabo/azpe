@@ -1836,8 +1836,6 @@ function Test-AzpeSafeInput {
     if ($RawInput -match '://[^/]*@') {
         throw "URLs containing embedded credentials are not allowed"
     }
-
-    return $true
 }
 
 # --- End Security.ps1 ---
@@ -2099,9 +2097,9 @@ function Invoke-AzpeProbe {
         if ($Json) {
             $cap = Get-AzpeCapability
             $dummyTgt = [PSCustomObject]@{ OriginalInput = $Target; Scheme = "https"; Hostname = $Target; Port = 443; RequestPath = "/"; TargetType = "UNRECOGNIZED_TARGET"; AzureServiceFamily = "NONE" }
-            Format-AzpeJsonOutput -Target $dummyTgt -Capability $cap -Evaluation $errEval
+            Write-Host (Format-AzpeJsonOutput -Target $dummyTgt -Capability $cap -Evaluation $errEval)
         } else {
-            Write-Output "AZPE`n`nInvalid target: $($_.Exception.Message)"
+            Write-Host "AZPE`n`nInvalid target: $($_.Exception.Message)"
         }
         return $errEval
     }
@@ -2116,11 +2114,9 @@ function Invoke-AzpeProbe {
         $swTotal.Stop()
 
         if ($Json) {
-            $jsonStr = Format-AzpeJsonOutput -Target $parsedTgt -Capability $cap -Evaluation $eval -DurationMs $swTotal.ElapsedMilliseconds
-            Write-Output $jsonStr
+            Write-Host (Format-AzpeJsonOutput -Target $parsedTgt -Capability $cap -Evaluation $eval -DurationMs $swTotal.ElapsedMilliseconds)
         } else {
-            $humanStr = Format-AzpeHumanOutput -Target $parsedTgt -Evaluation $eval -Detailed:$Detailed
-            Write-Output $humanStr
+            Write-Host (Format-AzpeHumanOutput -Target $parsedTgt -Evaluation $eval -Detailed:$Detailed)
         }
 
         return $eval
@@ -2136,11 +2132,9 @@ function Invoke-AzpeProbe {
         $swTotal.Stop()
 
         if ($Json) {
-            $jsonStr = Format-AzpeJsonOutput -Target $parsedTgt -Capability $cap -DNSObs $dnsObs -AddrObs $addrObs -Evaluation $eval -DurationMs $swTotal.ElapsedMilliseconds
-            Write-Output $jsonStr
+            Write-Host (Format-AzpeJsonOutput -Target $parsedTgt -Capability $cap -DNSObs $dnsObs -AddrObs $addrObs -Evaluation $eval -DurationMs $swTotal.ElapsedMilliseconds)
         } else {
-            $humanStr = Format-AzpeHumanOutput -Target $parsedTgt -Evaluation $eval -Detailed:$Detailed
-            Write-Output $humanStr
+            Write-Host (Format-AzpeHumanOutput -Target $parsedTgt -Evaluation $eval -Detailed:$Detailed)
         }
 
         return $eval
@@ -2154,11 +2148,9 @@ function Invoke-AzpeProbe {
         $swTotal.Stop()
 
         if ($Json) {
-            $jsonStr = Format-AzpeJsonOutput -Target $parsedTgt -Capability $cap -DNSObs $dnsObs -AddrObs $addrObs -TCPObs $tcpObs -Evaluation $eval -DurationMs $swTotal.ElapsedMilliseconds
-            Write-Output $jsonStr
+            Write-Host (Format-AzpeJsonOutput -Target $parsedTgt -Capability $cap -DNSObs $dnsObs -AddrObs $addrObs -TCPObs $tcpObs -Evaluation $eval -DurationMs $swTotal.ElapsedMilliseconds)
         } else {
-            $humanStr = Format-AzpeHumanOutput -Target $parsedTgt -Evaluation $eval -Detailed:$Detailed
-            Write-Output $humanStr
+            Write-Host (Format-AzpeHumanOutput -Target $parsedTgt -Evaluation $eval -Detailed:$Detailed)
         }
 
         return $eval
@@ -2181,12 +2173,11 @@ function Invoke-AzpeProbe {
     $swTotal.Stop()
 
     # 7. Render Output
+    $global:LastAzpeResult = $eval
     if ($Json) {
-        $jsonStr = Format-AzpeJsonOutput -Target $parsedTgt -Capability $cap -DNSObs $dnsObs -AddrObs $addrObs -TCPObs $tcpObs -TLSObs $tlsObs -HTTPObs $httpObs -Evaluation $eval -DurationMs $swTotal.ElapsedMilliseconds
-        Write-Host $jsonStr
+        Write-Host (Format-AzpeJsonOutput -Target $parsedTgt -Capability $cap -DNSObs $dnsObs -AddrObs $addrObs -TCPObs $tcpObs -TLSObs $tlsObs -HTTPObs $httpObs -Evaluation $eval -DurationMs $swTotal.ElapsedMilliseconds)
     } else {
-        $humanStr = Format-AzpeHumanOutput -Target $parsedTgt -Evaluation $eval -Detailed:$Detailed
-        Write-Host $humanStr
+        Write-Host (Format-AzpeHumanOutput -Target $parsedTgt -Evaluation $eval -Detailed:$Detailed)
     }
 
     return $eval
