@@ -96,6 +96,7 @@ All machine-readable output generated with `--json` contains top-level field `sc
 Current schema version: `1`.
 
 Key schema conventions in `schemaVersion: 1`:
+- `engine` object includes `name` (`NATIVE` or `POWERSHELL_COMPAT`), `version` (`0.1.0`), and engine-specific runtime capability metadata (`powerShellVersion`, `powerShellEdition`, `languageMode`).
 - `dns` object includes `status`, `resolverMode` (`GO_BUILTIN`), `queryHostname`, `durationMs`, `addresses`, `aggregateClassification`, `isIpLiteral`.
 - `http` object includes `status`, `aggregateStatus`, `method`, `path`, `durationMs`, and `results` slice containing per-address observations.
 - Unobserved/skipped phases omit optional fields or serialize `results: []`.

@@ -47,6 +47,8 @@ AZPE is distributed as a single, statically linked binary without runtime depend
 azpe probe <target>
 ```
 
+*Note on PowerShell Compatibility Client (`POWERSHELL_COMPAT`)*: For restricted Windows environments (e.g., Azure Virtual Desktop, AppLocker-managed session hosts) where arbitrary native `.exe` binaries are restricted, AZPE provides an official PowerShell compatibility client (`Invoke-AzpeProbe`). It adheres strictly to enterprise application controls and reports capability metadata (`"engine": { "name": "POWERSHELL_COMPAT", "version": "0.1.0" }`).
+
 ---
 
 ### 8. Diagnose, do not modify

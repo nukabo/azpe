@@ -1,0 +1,56 @@
+name: PowerShell CI
+
+on:
+  push:
+    paths:
+      - 'powershell/**'
+      - '.github/workflows/powershell-ci.yml'
+  pull_request:
+    paths:
+      - 'powershell/**'
+      - '.github/workflows/powershell-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  powershell-tests:
+    name: PowerShell Compatibility Client Tests
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate Module Manifest
+        shell: powershell
+        run: |
+          Test-ModuleManifest -Path ./powershell/Azpe/Azpe.psd1 -ErrorAction Stop
+
+      - name: Run Pester Tests under Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          Install-Module Pester -Force -Scope CurrentUser -SkipPublisherCheck
+          Import-Module Pester -Force
+          Invoke-Pester -Path ./powershell/Tests -Output Detailed -CI
+
+      - name: Run Pester Tests under PowerShell 7
+        shell: pwsh
+        run: |
+          Install-Module Pester -Force -Scope CurrentUser -SkipPublisherCheck
+          Import-Module Pester -Force
+          Invoke-Pester -Path ./powershell/Tests -Output Detailed -CI
+
+      - name: Build & Package Standalone Client
+        shell: pwsh
+        run: |
+          ./powershell/build.ps1 -SkipTests
+
+      - name: Verify Archive Package Artifacts
+        shell: pwsh
+        run: |
+          if (-not (Test-Path ./dist/azpe-powershell_0.1.0.zip)) {
+            throw "Expected release artifact dist/azpe-powershell_0.1.0.zip was not found!"
+          }
+          Write-Host "Build and packaging succeeded."

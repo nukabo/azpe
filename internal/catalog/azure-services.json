@@ -1,0 +1,33 @@
+{
+  "recognizedPatterns": [
+    { "suffix": ".vault.azure.net", "family": "KEY_VAULT", "displayName": "Key Vault" },
+    { "suffix": ".managedhsm.azure.net", "family": "KEY_VAULT", "displayName": "Key Vault" },
+    { "suffix": ".blob.core.windows.net", "family": "STORAGE_BLOB", "displayName": "Storage (Blob)" },
+    { "suffix": ".dfs.core.windows.net", "family": "STORAGE_DFS", "displayName": "Storage (Data Lake Gen2 / DFS)" },
+    { "suffix": ".file.core.windows.net", "family": "STORAGE_FILE", "displayName": "Storage (File)" },
+    { "suffix": ".queue.core.windows.net", "family": "STORAGE_QUEUE", "displayName": "Storage (Queue)" },
+    { "suffix": ".table.core.windows.net", "family": "STORAGE_TABLE", "displayName": "Storage (Table)" },
+    { "suffix": ".web.core.windows.net", "family": "STORAGE_WEB", "displayName": "Storage (Static Web)" },
+    { "suffix": ".search.windows.net", "family": "AI_SEARCH", "displayName": "Azure AI Search" },
+    { "suffix": ".database.windows.net", "family": "SQL", "displayName": "Azure SQL Database" },
+    { "suffix": ".documents.azure.com", "family": "COSMOS_DB", "displayName": "Azure Cosmos DB" },
+    { "suffix": ".mongo.cosmos.azure.com", "family": "COSMOS_DB", "displayName": "Azure Cosmos DB" },
+    { "suffix": ".cassandra.cosmos.azure.com", "family": "COSMOS_DB", "displayName": "Azure Cosmos DB" },
+    { "suffix": ".gremlin.cosmos.azure.com", "family": "COSMOS_DB", "displayName": "Azure Cosmos DB" },
+    { "suffix": ".table.cosmos.azure.com", "family": "COSMOS_DB", "displayName": "Azure Cosmos DB" },
+    { "suffix": ".openai.azure.com", "family": "AZURE_OPENAI", "displayName": "Azure OpenAI" },
+    { "suffix": ".azurecr.io", "family": "CONTAINER_REGISTRY", "displayName": "Azure Container Registry" },
+    { "suffix": ".azconfig.io", "family": "APP_CONFIGURATION", "displayName": "Azure App Configuration" },
+    { "suffix": ".servicebus.windows.net", "family": "SERVICE_BUS", "displayName": "Azure Service Bus / Event Hubs" }
+  ],
+  "possibleAzureDomains": [
+    ".azure.com",
+    ".azure.net",
+    ".windows.net",
+    ".azurecr.io",
+    ".azconfig.io",
+    ".cloudapp.azure.com",
+    ".azurewebsites.net",
+    ".azure-api.net"
+  ]
+}

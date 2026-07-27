@@ -99,6 +99,17 @@ sudo mv azpe /usr/local/bin/
 azpe probe myvault.vault.azure.net
 ```
 
+### Restricted Windows & AVD Environments (PowerShell Compatibility Client)
+
+For environments where native `.exe` binaries cannot easily be executed (such as Azure Virtual Desktop session hosts, AppLocker-managed workstations, or restricted jump hosts), AZPE provides an official **PowerShell Compatibility Client** (`Invoke-AzpeProbe`):
+
+```powershell
+# Run directly without binary installation or admin privileges
+. .\Invoke-AzpeProbe.ps1
+Invoke-AzpeProbe myvault.vault.azure.net
+```
+See [powershell/README.md](powershell/README.md) for enterprise module installation, Authenticode code-signing, and AppLocker deployment guidance.
+
 ---
 
 ## Verifying Release Artifacts

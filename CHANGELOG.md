@@ -5,6 +5,18 @@ All notable changes to `azpe` (Azure Private Endpoint Connectivity Diagnostic Ut
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Official PowerShell Compatibility Client (Phase 7)**:
+  - Enterprise PowerShell module `Azpe` (`Azpe.psd1`, `Azpe.psm1`) and standalone script `Invoke-AzpeProbe.ps1`.
+  - Full support for Windows PowerShell 5.1 and PowerShell 7 on Windows / AVD.
+  - Strict compliance with enterprise application controls (AppLocker, WDAC, Constrained Language Mode, Execution Policies). Zero security bypass techniques implemented or documented.
+  - Capability detection (`Get-AzpeCapability`) reporting PowerShell version, edition, language mode, `Resolve-DnsName`, `Test-NetConnection`, and `curl.exe`.
+  - High-fidelity target parsing, boundary-safe Azure service suffix catalogue, DNS address classification, TCP probing against captured IPs, and direct-IP `--resolve` HTTPS validation via native `curl.exe`.
+  - Full terminal rendering (`-Detailed`) and machine-readable JSON (`-Json`) schema compatibility with engine metadata (`"engine": { "name": "POWERSHELL_COMPAT", "version": "0.1.0" }`).
+  - GitHub Actions CI workflow (`powershell-ci.yml`) and deterministic packaging script (`powershell/build.ps1`).
+
 ## [v0.1.0] - 2026-07-22
 
 ### Added
