@@ -203,10 +203,10 @@ function Invoke-AzpeProbe {
     # 7. Render Output
     if ($Json) {
         $jsonStr = Format-AzpeJsonOutput -Target $parsedTgt -Capability $cap -DNSObs $dnsObs -AddrObs $addrObs -TCPObs $tcpObs -TLSObs $tlsObs -HTTPObs $httpObs -Evaluation $eval -DurationMs $swTotal.ElapsedMilliseconds
-        Write-Output $jsonStr
+        Write-Host $jsonStr
     } else {
         $humanStr = Format-AzpeHumanOutput -Target $parsedTgt -Evaluation $eval -Detailed:$Detailed
-        Write-Output $humanStr
+        Write-Host $humanStr
     }
 
     return $eval
