@@ -1,8 +1,9 @@
 [CmdletBinding()]
 param (
-    [string]$Version = "0.1.0",
+    [string]$Version = "0.2.0-rc.1",
     [string]$OutDir = "",
-    [switch]$SkipTests
+    [switch]$SkipTests,
+    [switch]$GenerateOnly
 )
 
 Set-StrictMode -Version Latest
@@ -81,6 +82,11 @@ if (`$MyInvocation.InvocationName -ne '.') {
 
 [System.IO.File]::WriteAllText($standaloneFile, $sb.ToString(), [System.Text.Encoding]::UTF8)
 Write-Host "Generated standalone script: $standaloneFile"
+
+if ($GenerateOnly) {
+    Write-Host "GenerateOnly specified. Stopping build early."
+    return
+}
 
 # 2. Validate Module Manifest
 if ((Get-Command Test-ModuleManifest -ErrorAction SilentlyContinue)) {

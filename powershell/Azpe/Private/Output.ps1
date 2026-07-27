@@ -27,7 +27,7 @@ function Format-AzpeHumanOutput {
         [void]$sb.AppendLine("Target Type:          $($Target.TargetType)")
         [void]$sb.AppendLine("Azure Service Family: $($Target.AzureServiceFamily)")
         [void]$sb.AppendLine("Engine Name:          POWERSHELL_COMPAT")
-        [void]$sb.AppendLine("Engine Version:       0.1.0")
+        [void]$sb.AppendLine("Engine Version:       0.2.0-rc.1")
         [void]$sb.AppendLine("Language Mode:        $($ExecutionContext.SessionState.LanguageMode)")
     }
 

@@ -1,6 +1,6 @@
 @{
     RootModule        = 'Azpe.psm1'
-    ModuleVersion     = '0.1.0'
+    ModuleVersion     = '0.2.0'
     GUID              = '8f3e2b1a-9c4d-4e5f-b6a7-0c8d9e1f2a3b'
     Author            = 'AZPE Authors'
     CompanyName       = 'AZPE Open Source Project'

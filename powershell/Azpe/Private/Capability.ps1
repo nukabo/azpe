@@ -83,7 +83,7 @@ function Get-AzpeCapability {
 
     return [PSCustomObject]@{
         EngineName        = "POWERSHELL_COMPAT"
-        EngineVersion     = "0.1.0"
+        EngineVersion     = "0.2.0-rc.1"
         PowerShellVersion = $psVer
         PowerShellEdition = $editionVal
         LanguageMode      = $langMode

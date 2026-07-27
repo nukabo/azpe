@@ -11,9 +11,11 @@ An official PowerShell compatibility client for **AZPE** (Azure Private Endpoint
 
 ## Technical Identity & Guarantees
 
-- **Engine Name**: `POWERSHELL_COMPAT` (`v0.1.0`)
+- **Engine Name**: `POWERSHELL_COMPAT` (`v0.2.0-rc.1`)
 - **Reference Implementation**: Native Go binary (`NATIVE`) remains the reference implementation and highest-fidelity engine.
 - **No Security-Control Bypass**: Operates strictly within enterprise security controls. Does **NOT** bypass, evade, or weaken AppLocker, WDAC, Microsoft Defender, SmartScreen, PowerShell Execution Policies, or Constrained Language Mode (CLM).
+- **Constrained Language Mode**: Detects Constrained Language Mode and degrades safely where restricted operations are unavailable.
+- **TCP Timeout Behavior**: In PowerShell compatibility mode, the Windows TCP diagnostic command (`Test-NetConnection`) may exceed `-TimeoutSeconds` in some environments.
 - **Zero Credentials / Zero Azure Login**: Operates purely out-of-band against DNS and network sockets. Never requires `az login`, `Connect-AzAccount`, or Azure subscriptions.
 
 ---

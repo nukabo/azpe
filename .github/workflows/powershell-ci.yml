@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - 'powershell/**'
+      - 'internal/catalog/**'
       - '.github/workflows/powershell-ci.yml'
   pull_request:
     paths:
       - 'powershell/**'
+      - 'internal/catalog/**'
       - '.github/workflows/powershell-ci.yml'
   workflow_dispatch:
 
@@ -28,16 +30,29 @@ jobs:
         run: |
           Test-ModuleManifest -Path ./powershell/Azpe/Azpe.psd1 -ErrorAction Stop
 
-      - name: Run Pester Tests under Windows PowerShell 5.1
+      - name: Verify Standalone Script is Up To Date
+        shell: pwsh
+        run: |
+          ./powershell/build.ps1 -GenerateOnly -OutDir $env:TEMP
+          $expected = (Get-FileHash ./powershell/Invoke-AzpeProbe.ps1 -Algorithm SHA256).Hash
+          $actual = (Get-FileHash "$env:TEMP/Invoke-AzpeProbe.ps1" -Algorithm SHA256).Hash
+          if ($expected -ne $actual) {
+            throw "Generated standalone script is out of date. Run powershell/build.ps1 to update."
+          }
+          Write-Host "Standalone script hash verification passed: $expected"
+
+      - name: Test with Windows PowerShell 5.1
         shell: powershell
         run: |
+          $PSVersionTable
           Install-Module Pester -Force -Scope CurrentUser -SkipPublisherCheck
           Import-Module Pester -Force
           Invoke-Pester -Path ./powershell/Tests -Output Detailed -CI
 
-      - name: Run Pester Tests under PowerShell 7
+      - name: Test with PowerShell 7
         shell: pwsh
         run: |
+          $PSVersionTable
           Install-Module Pester -Force -Scope CurrentUser -SkipPublisherCheck
           Import-Module Pester -Force
           Invoke-Pester -Path ./powershell/Tests -Output Detailed -CI
