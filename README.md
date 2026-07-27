@@ -72,43 +72,66 @@ When an application cannot reach an Azure service, engineers commonly cannot dis
 
 ---
 
-## Installation
+## Download & Installation Guide
 
-AZPE is released exclusively as standalone, zero-dependency native binaries for Linux, macOS, and Windows.
+Download the appropriate release archive from [GitHub Releases](https://github.com/nukabo/azpe/releases):
 
-1. Download the release archive for your operating system and architecture from [GitHub Releases](https://github.com/nukabo/azpe/releases):
+| Environment / Platform | Download Asset | What to Use It For |
+| ---------------------- | -------------- | ------------------ |
+| **Windows (Restricted / AVD / AppLocker)** | `azpe-powershell_0.1.1.zip` | Restricted Windows workstations, Azure Virtual Desktop (AVD), or hosts blocking `.exe` files |
+| **Windows (Native Binary)** | `azpe_0.1.1_windows_amd64.zip` | Standard Windows workstations & servers |
+| **Linux (AMD64)** | `azpe_0.1.1_linux_amd64.tar.gz` | Linux VMs, Kubernetes pods, CI/CD runners, container instances |
+| **Linux (ARM64)** | `azpe_0.1.1_linux_arm64.tar.gz` | Linux ARM64 VMs & servers |
+| **macOS (Apple Silicon)** | `azpe_0.1.1_darwin_arm64.tar.gz` | macOS M1/M2/M3/M4 workstations |
+| **macOS (Intel)** | `azpe_0.1.1_darwin_amd64.tar.gz` | macOS Intel workstations |
 
-| Platform | Release Archive |
-| -------- | --------------- |
-| **Linux (AMD64)** | `azpe_0.1.0_linux_amd64.tar.gz` |
-| **Linux (ARM64)** | `azpe_0.1.0_linux_arm64.tar.gz` |
-| **Windows (AMD64)** | `azpe_0.1.0_windows_amd64.zip` |
-| **macOS (Intel AMD64)** | `azpe_0.1.0_darwin_amd64.tar.gz` |
-| **macOS (Apple Silicon ARM64)** | `azpe_0.1.0_darwin_arm64.tar.gz` |
+---
 
-2. Extract the executable file (`azpe` on Linux/macOS, `azpe.exe` on Windows).
+### Option A: Windows (PowerShell Client — Restricted / AVD / AppLocker) ⭐ *Recommended for Enterprise*
 
-3. Place the executable on your system `PATH` (e.g. `/usr/local/bin` or `%Path%`), or run it directly from your current directory.
+If your Windows laptop or Azure Virtual Desktop host blocks running unsigned `.exe` files:
 
-```bash
-# Linux / macOS
-tar -xzf azpe_0.1.0_linux_amd64.tar.gz
-sudo mv azpe /usr/local/bin/
-
-# Test execution
-azpe probe myvault.vault.azure.net
-```
-
-### Restricted Windows & AVD Environments (PowerShell Compatibility Client)
-
-For environments where native `.exe` binaries cannot easily be executed (such as Azure Virtual Desktop session hosts, AppLocker-managed workstations, or restricted jump hosts), AZPE provides an official **PowerShell Compatibility Client** (`Invoke-AzpeProbe`):
+1. Download **`azpe-powershell_0.1.1.zip`** from [GitHub Releases](https://github.com/nukabo/azpe/releases).
+2. Right-click the `.zip` file → **Extract All...**
+3. Open PowerShell in the extracted folder and run:
 
 ```powershell
-# Run directly without binary installation or admin privileges
+# Load the script
 . .\Invoke-AzpeProbe.ps1
+
+# Run diagnostic probe
 Invoke-AzpeProbe myvault.vault.azure.net
 ```
-See [powershell/README.md](powershell/README.md) for enterprise module installation, Authenticode code-signing, and AppLocker deployment guidance.
+
+---
+
+### Option B: Windows (Native Executable)
+
+1. Download **`azpe_0.1.1_windows_amd64.zip`** from [GitHub Releases](https://github.com/nukabo/azpe/releases).
+2. Right-click → **Extract All...**
+3. Open PowerShell in the extracted folder:
+
+```powershell
+# Remove web download block if necessary
+Unblock-File .\azpe.exe
+
+# Run diagnostic probe
+.\azpe.exe probe myvault.vault.azure.net
+```
+
+> **Note**: If Windows shows `Access is denied` due to AppLocker policies, switch to **Option A (PowerShell Client)** above.
+
+---
+
+### Option C: Linux / macOS
+
+```bash
+# Download and extract (example for Linux AMD64)
+tar -xzf azpe_0.1.1_linux_amd64.tar.gz
+
+# Run probe
+./azpe probe myvault.vault.azure.net
+```
 
 ---
 

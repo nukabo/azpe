@@ -1,9 +1,7 @@
-# powershell/build.ps1
-# Deterministic build & packaging script for AZPE PowerShell Compatibility Client
-
 [CmdletBinding()]
 param (
     [string]$Version = "0.1.0",
+    [string]$OutDir = "",
     [switch]$SkipTests
 )
 
@@ -15,7 +13,7 @@ $scriptDir = $PSScriptRoot
 $rootDir = Resolve-Path (Join-Path $scriptDir "..")
 $moduleDir = Join-Path $scriptDir "Azpe"
 $standaloneFile = Join-Path $scriptDir "Invoke-AzpeProbe.ps1"
-$distDir = Join-Path $rootDir "dist"
+$distDir = if (-not [string]::IsNullOrEmpty($OutDir)) { $OutDir } else { $scriptDir }
 
 Write-Host "Building AZPE PowerShell Compatibility Client v$Version..."
 

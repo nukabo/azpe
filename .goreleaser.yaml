@@ -5,6 +5,7 @@ project_name: azpe
 before:
   hooks:
     - go mod tidy
+    - bash powershell/build.sh
 
 builds:
   - id: azpe
@@ -64,3 +65,5 @@ release:
   prerelease: auto
   mode: replace
   replace_existing_artifacts: true
+  extra_files:
+    - glob: "./powershell/azpe-powershell_*.zip"

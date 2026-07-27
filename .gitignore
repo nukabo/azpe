@@ -2,3 +2,4 @@
 dist/
 .gopath/
 *.exe
+powershell/*.zip
