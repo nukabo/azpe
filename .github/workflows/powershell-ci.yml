@@ -45,12 +45,14 @@ jobs:
       - name: Build & Package Standalone Client
         shell: pwsh
         run: |
-          ./powershell/build.ps1 -SkipTests
+          New-Item -ItemType Directory -Path ./dist -Force
+          ./powershell/build.ps1 -SkipTests -OutDir ./dist
 
       - name: Verify Archive Package Artifacts
         shell: pwsh
         run: |
-          if (-not (Test-Path ./dist/azpe-powershell_0.1.0.zip)) {
-            throw "Expected release artifact dist/azpe-powershell_0.1.0.zip was not found!"
+          $zipFiles = Get-ChildItem -Path ./dist -Filter "azpe-powershell_*.zip"
+          if ($null -eq $zipFiles -or $zipFiles.Count -eq 0) {
+            throw "Expected release artifact dist/azpe-powershell_*.zip was not found!"
           }
-          Write-Host "Build and packaging succeeded."
+          Write-Host "Build and packaging succeeded: $($zipFiles[0].FullName)"
