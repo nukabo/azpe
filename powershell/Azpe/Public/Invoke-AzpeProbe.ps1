@@ -56,8 +56,8 @@ function Invoke-AzpeProbe {
     [CmdletBinding()]
     [Alias("azpe")]
     param (
-        [Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
-        [string]$Target,
+        [Parameter(Position = 0, Mandatory = $false, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [string]$Target = "",
 
         [Parameter(Mandatory = $false)]
         [int]$TimeoutSeconds = 5,
@@ -76,6 +76,29 @@ function Invoke-AzpeProbe {
     )
 
     $swTotal = [System.Diagnostics.Stopwatch]::StartNew()
+
+    if ([string]::IsNullOrWhiteSpace($Target)) {
+        $errEval = [PSCustomObject]@{
+            Scenario    = "INVALID_INPUT"
+            ExitCode    = 2
+            Title       = "Target required"
+            Explanation = "No Azure service hostname or URL was specified."
+            Impact      = "AZPE requires a target Azure service hostname to diagnose."
+            Summary     = "Usage:`n  .\Invoke-AzpeProbe.ps1 <target-hostname-or-url>`n  Invoke-AzpeProbe myvault.vault.azure.net`n`nExample:`n  .\Invoke-AzpeProbe.ps1 sapintegrationsde.blob.core.windows.net"
+            State       = "UNKNOWN"
+            LikelyOwner = "UNKNOWN"
+            NextAction  = "Provide the target Azure service hostname configured in your application."
+            Warnings    = @()
+        }
+        if ($Json) {
+            $cap = Get-AzpeCapability
+            $dummyTgt = [PSCustomObject]@{ OriginalInput = ""; Scheme = "https"; Hostname = ""; Port = 443; RequestPath = "/"; TargetType = "UNRECOGNIZED_TARGET"; AzureServiceFamily = "NONE" }
+            Format-AzpeJsonOutput -Target $dummyTgt -Capability $cap -Evaluation $errEval
+        } else {
+            Write-Output "AZPE`n`nThe target Azure service hostname or URL is required.`n`nUsage:`n  .\Invoke-AzpeProbe.ps1 <target-hostname-or-url>`n  Invoke-AzpeProbe myvault.vault.azure.net`n`nExample:`n  .\Invoke-AzpeProbe.ps1 sapintegrationsde.blob.core.windows.net"
+        }
+        return $errEval
+    }
 
     # 1. Safety & Parameter Parsing
     try {
