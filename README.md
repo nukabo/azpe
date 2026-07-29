@@ -1,7 +1,7 @@
 # AZPE: Azure Private Endpoint connectivity diagnostic tool
 
 [![CI](https://github.com/nukabo/azpe/actions/workflows/ci.yml/badge.svg)](https://github.com/nukabo/azpe/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/nukabo/azpe)](https://goreportcard.com/report/github.com/nukabo/azpe)
+[![Go Reference](https://pkg.go.dev/badge/github.com/nukabo/azpe.svg)](https://pkg.go.dev/github.com/nukabo/azpe)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 `azpe` is a small, portable, zero-login, single-binary command-line utility for diagnosing Azure Private Endpoint connectivity directly from a workload's actual execution environment (e.g. application container, pod, VM, serverless instance).
