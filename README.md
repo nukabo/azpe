@@ -1,4 +1,4 @@
-# AZPE: 
+# AZPE
 ### Azure Private Endpoint connectivity diagnostic tool
 
 [![CI](https://github.com/nukabo/azpe/actions/workflows/ci.yml/badge.svg)](https://github.com/nukabo/azpe/actions/workflows/ci.yml)
