@@ -110,6 +110,48 @@ func TestClassifyTarget(t *testing.T) {
 			wantFamily: target.FamilyServiceBus,
 		},
 		{
+			name:       "Redis Cache",
+			input:      "mycache.redis.cache.windows.net",
+			wantType:   target.TargetTypeRecognizedAzure,
+			wantFamily: target.FamilyRedisCache,
+		},
+		{
+			name:       "Event Grid",
+			input:      "mytopic.eventgrid.azure.net",
+			wantType:   target.TargetTypeRecognizedAzure,
+			wantFamily: target.FamilyEventGrid,
+		},
+		{
+			name:       "SignalR Service",
+			input:      "mysignalr.service.signalr.net",
+			wantType:   target.TargetTypeRecognizedAzure,
+			wantFamily: target.FamilySignalR,
+		},
+		{
+			name:       "Data Factory",
+			input:      "myadf.datafactory.azure.net",
+			wantType:   target.TargetTypeRecognizedAzure,
+			wantFamily: target.FamilyDataFactory,
+		},
+		{
+			name:       "Synapse Analytics Dev",
+			input:      "workspace.dev.azuresynapse.net",
+			wantType:   target.TargetTypeRecognizedAzure,
+			wantFamily: target.FamilySynapse,
+		},
+		{
+			name:       "Synapse SQL",
+			input:      "workspace.sql.azuresynapse.net",
+			wantType:   target.TargetTypeRecognizedAzure,
+			wantFamily: target.FamilySynapse,
+		},
+		{
+			name:       "Azure Automation",
+			input:      "myauto.azure-automation.net",
+			wantType:   target.TargetTypeRecognizedAzure,
+			wantFamily: target.FamilyAutomation,
+		},
+		{
 			name:       "Possible Azure generic domain",
 			input:      "custom-service.azurewebsites.net",
 			wantType:   target.TargetTypePossibleAzure,

@@ -67,4 +67,14 @@ describe "Assessment Scenario & Exit Code Parity" {
         $eval.Title | should -be "The Azure service name cannot be resolved"
         $eval.Scenario | should -be "DNS_LOOKUP_FAILED"
     }
+
+    it "Recognizes newly added Azure Private Endpoint service families in PowerShell client" {
+        (Classify-AzpeTarget -Hostname "mycache.redis.cache.windows.net").AzureServiceFamily | should -be "REDIS_CACHE"
+        (Classify-AzpeTarget -Hostname "mytopic.eventgrid.azure.net").AzureServiceFamily | should -be "EVENT_GRID"
+        (Classify-AzpeTarget -Hostname "mysignalr.service.signalr.net").AzureServiceFamily | should -be "SIGNALR"
+        (Classify-AzpeTarget -Hostname "myadf.datafactory.azure.net").AzureServiceFamily | should -be "DATA_FACTORY"
+        (Classify-AzpeTarget -Hostname "workspace.dev.azuresynapse.net").AzureServiceFamily | should -be "SYNAPSE"
+        (Classify-AzpeTarget -Hostname "workspace.sql.azuresynapse.net").AzureServiceFamily | should -be "SYNAPSE"
+        (Classify-AzpeTarget -Hostname "myauto.azure-automation.net").AzureServiceFamily | should -be "AUTOMATION"
+    }
 }

@@ -64,6 +64,19 @@ Invoke-Pester -Path ./powershell/Tests -Output Detailed
 
 ---
 
+## Azure service catalogue maintenance
+
+AZPE relies on a shared Azure service catalogue to recognize official Azure Private Link domain suffixes (e.g. `.vault.azure.net`, `.blob.core.windows.net`, `.redis.cache.windows.net`).
+
+When proposing new Azure service suffixes or updated private domain patterns:
+
+1. **Update `internal/catalog/azure-services.json`**: Add the new pattern with its `suffix`, `family`, and human-friendly `displayName`.
+2. **Update Go target classifier (`internal/target/recognize.go`)**: Ensure the `AzureServiceFamily` enum and pattern slice include the new service family.
+3. **Update PowerShell target classifier (`powershell/Azpe/Private/Catalogue.ps1`)**: Keep the PowerShell catalogue and display names 100% synchronized with `azure-services.json`.
+4. **Add Unit & Parity Tests**: Add test cases in `internal/target/recognize_test.go` and `powershell/Tests/Parity.Tests.ps1` verifying target classification across both clients.
+
+---
+
 ## Core product principles
 
 > [!NOTE]
