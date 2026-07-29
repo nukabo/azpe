@@ -206,4 +206,19 @@ func TestEvaluate(t *testing.T) {
 			t.Errorf("title = %q, want %q", eval.Title, "The Azure service responded on only some private addresses")
 		}
 	})
+
+	t.Run("Possible Azure domain unsupported service Exit 8 (ScenarioPossibleAzure)", func(t *testing.T) {
+		tgt, _ := target.Parse("custom-app.azurewebsites.net")
+		eval := assess.Evaluate(tgt, assess.DNSStatusSuccess, assess.AggregatePublicOnly, []string{"20.42.64.44"}, []assess.AddressClassification{assess.AddrPublic}, "", "", nil, nil, nil)
+
+		if eval.ExitCode != 8 {
+			t.Errorf("exitCode = %d, want 8", eval.ExitCode)
+		}
+		if eval.Scenario != assess.ScenarioPossibleAzure {
+			t.Errorf("scenario = %v, want %v", eval.Scenario, assess.ScenarioPossibleAzure)
+		}
+		if eval.Title != "This Azure service is not supported yet" {
+			t.Errorf("title = %q, want %q", eval.Title, "This Azure service is not supported yet")
+		}
+	})
 }
