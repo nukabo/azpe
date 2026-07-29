@@ -13,8 +13,8 @@ $ErrorActionPreference = "Stop"
 $scriptDir = $PSScriptRoot
 $rootDir = Resolve-Path (Join-Path $scriptDir "..")
 $moduleDir = Join-Path $scriptDir "Azpe"
-$standaloneFile = Join-Path $scriptDir "Invoke-AzpeProbe.ps1"
 $distDir = if (-not [string]::IsNullOrEmpty($OutDir)) { $OutDir } else { $scriptDir }
+$standaloneFile = Join-Path $distDir "Invoke-AzpeProbe.ps1"
 
 Write-Host "Building AZPE PowerShell Compatibility Client v$Version..."
 
