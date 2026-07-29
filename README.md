@@ -185,7 +185,7 @@ Remove-Item C:\Path\To\azpe.exe
 ## Critical security policies & disclaimers
 
 > [!IMPORTANT]
-> **No Control-Plane Claims**: AZPE observes connectivity from the workload's current execution environment without Azure control-plane access.
+> **No control-plane claims**: AZPE observes connectivity from the workload's current execution environment without Azure control-plane access.
 > - An approved Azure Private Endpoint configuration in the Azure portal **does not prove workload connectivity** from your environment.
 > - Observing resolution to a private IP address is **evidence**, not formal proof, that the target is using private DNS.
 > - A valid TLS connection proves that the certificate chain is trusted and matches the hostname.
