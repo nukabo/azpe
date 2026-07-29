@@ -18,7 +18,14 @@
     { "suffix": ".openai.azure.com", "family": "AZURE_OPENAI", "displayName": "Azure OpenAI" },
     { "suffix": ".azurecr.io", "family": "CONTAINER_REGISTRY", "displayName": "Azure Container Registry" },
     { "suffix": ".azconfig.io", "family": "APP_CONFIGURATION", "displayName": "Azure App Configuration" },
-    { "suffix": ".servicebus.windows.net", "family": "SERVICE_BUS", "displayName": "Azure Service Bus / Event Hubs" }
+    { "suffix": ".servicebus.windows.net", "family": "SERVICE_BUS", "displayName": "Azure Service Bus / Event Hubs" },
+    { "suffix": ".redis.cache.windows.net", "family": "REDIS_CACHE", "displayName": "Azure Cache for Redis" },
+    { "suffix": ".eventgrid.azure.net", "family": "EVENT_GRID", "displayName": "Azure Event Grid" },
+    { "suffix": ".service.signalr.net", "family": "SIGNALR", "displayName": "Azure SignalR Service" },
+    { "suffix": ".datafactory.azure.net", "family": "DATA_FACTORY", "displayName": "Azure Data Factory" },
+    { "suffix": ".dev.azuresynapse.net", "family": "SYNAPSE", "displayName": "Azure Synapse Analytics" },
+    { "suffix": ".sql.azuresynapse.net", "family": "SYNAPSE", "displayName": "Azure Synapse SQL" },
+    { "suffix": ".azure-automation.net", "family": "AUTOMATION", "displayName": "Azure Automation" }
   ],
   "possibleAzureDomains": [
     ".azure.com",
@@ -28,6 +35,7 @@
     ".azconfig.io",
     ".cloudapp.azure.com",
     ".azurewebsites.net",
-    ".azure-api.net"
+    ".azure-api.net",
+    ".azmk8s.io"
   ]
 }

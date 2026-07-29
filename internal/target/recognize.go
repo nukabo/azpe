@@ -37,6 +37,12 @@ const (
 	FamilyContainerRegistry AzureServiceFamily = "CONTAINER_REGISTRY"
 	FamilyAppConfiguration  AzureServiceFamily = "APP_CONFIGURATION"
 	FamilyServiceBus        AzureServiceFamily = "SERVICE_BUS"
+	FamilyRedisCache        AzureServiceFamily = "REDIS_CACHE"
+	FamilyEventGrid         AzureServiceFamily = "EVENT_GRID"
+	FamilySignalR           AzureServiceFamily = "SIGNALR"
+	FamilyDataFactory       AzureServiceFamily = "DATA_FACTORY"
+	FamilySynapse           AzureServiceFamily = "SYNAPSE"
+	FamilyAutomation        AzureServiceFamily = "AUTOMATION"
 	FamilyOtherAzure        AzureServiceFamily = "OTHER_AZURE"
 	FamilyNone              AzureServiceFamily = "NONE"
 )
@@ -76,6 +82,18 @@ func (f AzureServiceFamily) DisplayName() string {
 		return "Azure App Configuration"
 	case FamilyServiceBus:
 		return "Azure Service Bus / Event Hubs"
+	case FamilyRedisCache:
+		return "Azure Cache for Redis"
+	case FamilyEventGrid:
+		return "Azure Event Grid"
+	case FamilySignalR:
+		return "Azure SignalR Service"
+	case FamilyDataFactory:
+		return "Azure Data Factory"
+	case FamilySynapse:
+		return "Azure Synapse Analytics"
+	case FamilyAutomation:
+		return "Azure Automation"
 	case FamilyOtherAzure:
 		return "Azure Service"
 	default:
@@ -108,6 +126,13 @@ var recognizedPatterns = []servicePattern{
 	{suffix: ".azurecr.io", family: FamilyContainerRegistry},
 	{suffix: ".azconfig.io", family: FamilyAppConfiguration},
 	{suffix: ".servicebus.windows.net", family: FamilyServiceBus},
+	{suffix: ".redis.cache.windows.net", family: FamilyRedisCache},
+	{suffix: ".eventgrid.azure.net", family: FamilyEventGrid},
+	{suffix: ".service.signalr.net", family: FamilySignalR},
+	{suffix: ".datafactory.azure.net", family: FamilyDataFactory},
+	{suffix: ".dev.azuresynapse.net", family: FamilySynapse},
+	{suffix: ".sql.azuresynapse.net", family: FamilySynapse},
+	{suffix: ".azure-automation.net", family: FamilyAutomation},
 }
 
 var possibleAzureDomains = []string{
@@ -119,6 +144,7 @@ var possibleAzureDomains = []string{
 	".cloudapp.azure.com",
 	".azurewebsites.net",
 	".azure-api.net",
+	".azmk8s.io",
 }
 
 // ClassifyTarget recognizes whether a hostname is an IP literal, a recognized Azure service, a possible Azure service, or an unrecognized target.

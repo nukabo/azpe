@@ -744,6 +744,13 @@ function Get-AzpeServiceCatalogue {
         [PSCustomObject]@{ Suffix = ".azurecr.io"; Family = "CONTAINER_REGISTRY"; DisplayName = "Azure Container Registry" }
         [PSCustomObject]@{ Suffix = ".azconfig.io"; Family = "APP_CONFIGURATION"; DisplayName = "Azure App Configuration" }
         [PSCustomObject]@{ Suffix = ".servicebus.windows.net"; Family = "SERVICE_BUS"; DisplayName = "Azure Service Bus / Event Hubs" }
+        [PSCustomObject]@{ Suffix = ".redis.cache.windows.net"; Family = "REDIS_CACHE"; DisplayName = "Azure Cache for Redis" }
+        [PSCustomObject]@{ Suffix = ".eventgrid.azure.net"; Family = "EVENT_GRID"; DisplayName = "Azure Event Grid" }
+        [PSCustomObject]@{ Suffix = ".service.signalr.net"; Family = "SIGNALR"; DisplayName = "Azure SignalR Service" }
+        [PSCustomObject]@{ Suffix = ".datafactory.azure.net"; Family = "DATA_FACTORY"; DisplayName = "Azure Data Factory" }
+        [PSCustomObject]@{ Suffix = ".dev.azuresynapse.net"; Family = "SYNAPSE"; DisplayName = "Azure Synapse Analytics" }
+        [PSCustomObject]@{ Suffix = ".sql.azuresynapse.net"; Family = "SYNAPSE"; DisplayName = "Azure Synapse SQL" }
+        [PSCustomObject]@{ Suffix = ".azure-automation.net"; Family = "AUTOMATION"; DisplayName = "Azure Automation" }
     )
 
     $possibleDomains = @(
@@ -754,7 +761,8 @@ function Get-AzpeServiceCatalogue {
         ".azconfig.io",
         ".cloudapp.azure.com",
         ".azurewebsites.net",
-        ".azure-api.net"
+        ".azure-api.net",
+        ".azmk8s.io"
     )
 
     return [PSCustomObject]@{
@@ -784,6 +792,12 @@ function Get-AzpeFamilyDisplayName {
         "CONTAINER_REGISTRY" { return "Azure Container Registry" }
         "APP_CONFIGURATION"  { return "Azure App Configuration" }
         "SERVICE_BUS"        { return "Azure Service Bus / Event Hubs" }
+        "REDIS_CACHE"        { return "Azure Cache for Redis" }
+        "EVENT_GRID"         { return "Azure Event Grid" }
+        "SIGNALR"            { return "Azure SignalR Service" }
+        "DATA_FACTORY"       { return "Azure Data Factory" }
+        "SYNAPSE"            { return "Azure Synapse Analytics" }
+        "AUTOMATION"         { return "Azure Automation" }
         "OTHER_AZURE"        { return "Azure Service" }
         default              { return "Unknown Service" }
     }
