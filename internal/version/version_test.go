@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/azpe/azpe/internal/version"
+	"github.com/nukabo/azpe/internal/version"
 )
 
 func TestVersionString_Default(t *testing.T) {

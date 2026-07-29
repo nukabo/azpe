@@ -8,15 +8,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/azpe/azpe/internal/assess"
-	"github.com/azpe/azpe/internal/dns"
-	"github.com/azpe/azpe/internal/http"
-	"github.com/azpe/azpe/internal/model"
-	"github.com/azpe/azpe/internal/output"
-	"github.com/azpe/azpe/internal/target"
-	"github.com/azpe/azpe/internal/tcp"
-	"github.com/azpe/azpe/internal/tls"
-	"github.com/azpe/azpe/internal/version"
+	"github.com/nukabo/azpe/internal/assess"
+	"github.com/nukabo/azpe/internal/dns"
+	"github.com/nukabo/azpe/internal/http"
+	"github.com/nukabo/azpe/internal/model"
+	"github.com/nukabo/azpe/internal/output"
+	"github.com/nukabo/azpe/internal/target"
+	"github.com/nukabo/azpe/internal/tcp"
+	"github.com/nukabo/azpe/internal/tls"
+	"github.com/nukabo/azpe/internal/version"
 )
 
 // Run executes the CLI logic with the provided argument list and writers.
@@ -120,21 +120,7 @@ func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver, pr
 	noHTTPFlag := fs.Bool("no-http", false, "Skip HTTP probe phase")
 	noColorFlag := fs.Bool("no-color", false, "Disable color output")
 
-	var flagArgs []string
-	var targetArgs []string
-
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if strings.HasPrefix(arg, "-") {
-			flagArgs = append(flagArgs, arg)
-			if (arg == "--timeout" || arg == "-timeout") && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				flagArgs = append(flagArgs, args[i+1])
-				i++
-			}
-		} else {
-			targetArgs = append(targetArgs, arg)
-		}
-	}
+	flagArgs, targetArgs := splitFlagsAndPositional(args)
 
 	if err := fs.Parse(flagArgs); err != nil {
 		return ExitUsageOrTargetError
@@ -267,4 +253,49 @@ func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver, pr
 	default:
 		return ExitInconclusive // Exit code 8 for mixed, special, literal, unrecognized, etc.
 	}
+}
+
+// splitFlagsAndPositional separates CLI flags from positional arguments,
+// supporting flags placed before or after target positionals, -- flag terminators,
+// and both --flag=val and --flag val value formats.
+func splitFlagsAndPositional(args []string) ([]string, []string) {
+	var flagArgs []string
+	var targetArgs []string
+	inTerminator := false
+
+	// Value-taking flags that consume the next token if not using =
+	valueFlags := map[string]bool{
+		"-timeout":  true,
+		"--timeout": true,
+	}
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+
+		if inTerminator {
+			targetArgs = append(targetArgs, arg)
+			continue
+		}
+
+		if arg == "--" {
+			inTerminator = true
+			continue
+		}
+
+		if strings.HasPrefix(arg, "-") && arg != "-" {
+			flagArgs = append(flagArgs, arg)
+			cleanFlag := arg
+			if idx := strings.Index(arg, "="); idx != -1 {
+				cleanFlag = arg[:idx]
+			}
+			if valueFlags[cleanFlag] && !strings.Contains(arg, "=") && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				flagArgs = append(flagArgs, args[i+1])
+				i++
+			}
+		} else {
+			targetArgs = append(targetArgs, arg)
+		}
+	}
+
+	return flagArgs, targetArgs
 }

@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/azpe/azpe/internal/assess"
-	"github.com/azpe/azpe/internal/model"
-	"github.com/azpe/azpe/internal/target"
-	"github.com/azpe/azpe/internal/version"
+	"github.com/nukabo/azpe/internal/assess"
+	"github.com/nukabo/azpe/internal/model"
+	"github.com/nukabo/azpe/internal/target"
+	"github.com/nukabo/azpe/internal/version"
 )
 
 func TestResultJSONSerialization(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/azpe/azpe/internal/assess"
+	"github.com/nukabo/azpe/internal/assess"
 )
 
 func TestClassifyIP(t *testing.T) {

@@ -1,3 +1,3 @@
-module github.com/azpe/azpe
+module github.com/nukabo/azpe
 
 go 1.22

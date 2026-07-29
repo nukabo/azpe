@@ -3,7 +3,7 @@ package assess_test
 import (
 	"testing"
 
-	"github.com/azpe/azpe/internal/assess"
+	"github.com/nukabo/azpe/internal/assess"
 )
 
 func TestVocab(t *testing.T) {

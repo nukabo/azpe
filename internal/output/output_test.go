@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/azpe/azpe/internal/assess"
-	"github.com/azpe/azpe/internal/model"
-	"github.com/azpe/azpe/internal/output"
-	"github.com/azpe/azpe/internal/target"
+	"github.com/nukabo/azpe/internal/assess"
+	"github.com/nukabo/azpe/internal/model"
+	"github.com/nukabo/azpe/internal/output"
+	"github.com/nukabo/azpe/internal/target"
 )
 
 func TestRender_HTTP403_SimpleAndDetailed(t *testing.T) {

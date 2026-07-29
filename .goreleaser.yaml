@@ -17,9 +17,9 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
-      - -X github.com/azpe/azpe/internal/version.Version={{.Version}}
-      - -X github.com/azpe/azpe/internal/version.Commit={{.FullCommit}}
-      - -X github.com/azpe/azpe/internal/version.Date={{.Date}}
+      - -X github.com/nukabo/azpe/internal/version.Version={{.Version}}
+      - -X github.com/nukabo/azpe/internal/version.Commit={{.FullCommit}}
+      - -X github.com/nukabo/azpe/internal/version.Date={{.Date}}
     goos:
       - linux
       - windows

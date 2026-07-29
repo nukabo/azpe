@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/azpe/azpe/internal/assess"
-	"github.com/azpe/azpe/internal/model"
+	"github.com/nukabo/azpe/internal/assess"
+	"github.com/nukabo/azpe/internal/model"
 )
 
 func TestFakeProber_TLSValidAndFailed(t *testing.T) {

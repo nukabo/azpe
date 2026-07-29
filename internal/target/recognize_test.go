@@ -3,7 +3,7 @@ package target_test
 import (
 	"testing"
 
-	"github.com/azpe/azpe/internal/target"
+	"github.com/nukabo/azpe/internal/target"
 )
 
 func TestClassifyTarget(t *testing.T) {

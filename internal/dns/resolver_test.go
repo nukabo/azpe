@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/azpe/azpe/internal/assess"
-	"github.com/azpe/azpe/internal/dns"
-	"github.com/azpe/azpe/internal/target"
+	"github.com/nukabo/azpe/internal/assess"
+	"github.com/nukabo/azpe/internal/dns"
+	"github.com/nukabo/azpe/internal/target"
 )
 
 type FakeResolver struct {

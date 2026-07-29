@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/azpe/azpe/internal/cli"
+	"github.com/nukabo/azpe/internal/cli"
 )
 
 func main() {

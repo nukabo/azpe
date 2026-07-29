@@ -3,8 +3,8 @@ package catalog_test
 import (
 	"testing"
 
-	"github.com/azpe/azpe/internal/catalog"
-	"github.com/azpe/azpe/internal/target"
+	"github.com/nukabo/azpe/internal/catalog"
+	"github.com/nukabo/azpe/internal/target"
 )
 
 func TestEmbeddedCatalogMatch(t *testing.T) {

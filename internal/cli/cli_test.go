@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/azpe/azpe/internal/assess"
-	"github.com/azpe/azpe/internal/cli"
-	"github.com/azpe/azpe/internal/http"
-	"github.com/azpe/azpe/internal/model"
-	"github.com/azpe/azpe/internal/tcp"
-	"github.com/azpe/azpe/internal/tls"
+	"github.com/nukabo/azpe/internal/assess"
+	"github.com/nukabo/azpe/internal/cli"
+	"github.com/nukabo/azpe/internal/http"
+	"github.com/nukabo/azpe/internal/model"
+	"github.com/nukabo/azpe/internal/tcp"
+	"github.com/nukabo/azpe/internal/tls"
 )
 
 type FakeResolver struct {
@@ -207,6 +207,18 @@ func TestCLIRoutingWithFakeResolverAndProbers(t *testing.T) {
 			args:       []string{"probe", "private.vault.azure.net", "--details", "--no-color"},
 			wantExit:   cli.ExitSuccess,
 			wantStdout: "=== HTTP ===",
+		},
+		{
+			name:       "probe flag syntax with equal sign --timeout=2s",
+			args:       []string{"probe", "--timeout=2s", "private.vault.azure.net", "--no-color"},
+			wantExit:   cli.ExitSuccess,
+			wantStdout: "✓ The Azure service responded",
+		},
+		{
+			name:       "probe trailing flag with equal sign target --timeout=2s",
+			args:       []string{"probe", "private.vault.azure.net", "--timeout=2s", "--no-color"},
+			wantExit:   cli.ExitSuccess,
+			wantStdout: "✓ The Azure service responded",
 		},
 	}
 
