@@ -1,15 +1,15 @@
-# AZPE Result Semantics & Schema Specification
+# AZPE result semantics & schema specification
 
 This document defines the vocabulary, assessment logic, target normalization rules, schema versioning, and exit code contracts used by AZPE.
 
 ---
 
-## Operating-System DNS Resolution Semantics
+## Operating-system DNS resolution semantics
 
 AZPE uses Go's platform resolver behavior (`dns.OSResolver`).
 
 > [!NOTE]
-> **DNS Resolver Mode (`GO_BUILTIN`)**:
+> **DNS resolver mode (`GO_BUILTIN`)**:
 > In statically compiled Unix releases (`CGO_ENABLED=0`), name resolution uses Go's built-in pure-Go DNS resolver (which parses system configuration files such as `/etc/resolv.conf`, `/etc/hosts`, and `/etc/nsswitch.conf`) rather than invoking C/libc functions like `getaddrinfo`.
 >
 > In `--details` terminal output, AZPE reports:
@@ -21,7 +21,7 @@ AZPE uses Go's platform resolver behavior (`dns.OSResolver`).
 
 ---
 
-## Target Normalization
+## Target normalization
 
 AZPE normalizes input target strings into a consistent `Target` model containing:
 - `originalInput`: Raw user input string
@@ -32,7 +32,7 @@ AZPE normalizes input target strings into a consistent `Target` model containing
 - `targetType`: `RECOGNIZED_AZURE_SERVICE`, `POSSIBLE_AZURE_SERVICE`, `UNRECOGNIZED_TARGET`, or `IP_LITERAL`
 - `azureServiceFamily`: Identified Azure service family (e.g. `KEY_VAULT`, `STORAGE_BLOB`, `SQL`, `COSMOS_DB`, `AI_SEARCH`, `AZURE_OPENAI`, `CONTAINER_REGISTRY`, `APP_CONFIGURATION`, `SERVICE_BUS`, `OTHER_AZURE`, `NONE`)
 
-### IP Literals
+### IP literals
 When the target hostname is an IPv4 or IPv6 literal (e.g. `10.0.0.1`, `[fd00::1]`), AZPE bypasses OS hostname DNS resolution.
 - `dns.status`: `NOT_APPLICABLE`
 - `dns.isIpLiteral`: `true`
@@ -42,7 +42,7 @@ When the target hostname is an IPv4 or IPv6 literal (e.g. `10.0.0.1`, `[fd00::1]
 
 ---
 
-## Address Classification
+## Address classification
 
 Each resolved IP address is classified independently with explicit precedence rules:
 
@@ -60,20 +60,20 @@ Each resolved IP address is classified independently with explicit precedence ru
 
 ---
 
-## Direct HTTPS Probing (Phase 5)
+## Direct HTTPS probing (Phase 5)
 
 When direct TCP probing and TLS validation succeed for private IP addresses (`VALID`), AZPE sends a single unauthenticated HTTPS GET request to `captured IP + port` using the original Azure service hostname as `Host` header and `ServerName` (SNI).
 
-- **Central Product Insight**: Any syntactically valid HTTP response (2xx, 3xx, 400, 401, 403, 404, 405, 409, 429, 5xx) proves that end-to-end network, TCP, TLS, and HTTP transport reached the Azure service.
+- **Central product insight**: Any syntactically valid HTTP response (2xx, 3xx, 400, 401, 403, 404, 405, 409, 429, 5xx) proves that end-to-end network, TCP, TLS, and HTTP transport reached the Azure service.
 - **HTTP 401 & 403**: Categorized as `AUTHENTICATION_REQUIRED` and `ACCESS_DENIED`. They return Exit Code `0` (`The Azure service responded`) because network transport is fully functional.
-- **No Second DNS Lookup**: Direct socket connection dials `net.JoinHostPort(capturedIP, port)`.
-- **Proxy Bypass**: Environment proxy variables (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`) are explicitly ignored (`Proxy: nil`).
-- **Redirects Not Followed**: Redirects (3xx) are returned directly to AZPE without following target URLs.
-- **Bounded Body & Query Redaction**: Reads up to 4 KiB limit, discards content, and redacts query parameter values in output (e.g. `/path?sig=REDACTED`).
+- **No second DNS lookup**: Direct socket connection dials `net.JoinHostPort(capturedIP, port)`.
+- **Proxy bypass**: Environment proxy variables (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`) are explicitly ignored (`Proxy: nil`).
+- **Redirects not followed**: Redirects (3xx) are returned directly to AZPE without following target URLs.
+- **Bounded body & query redaction**: Reads up to 4 KiB limit, discards content, and redacts query parameter values in output (e.g. `/path?sig=REDACTED`).
 
 ---
 
-## Assessment Rules & Exit Codes
+## Assessment rules & exit codes
 
 | Case | Human Title | Overall State (JSON) | Exit Code | Description |
 | ---- | ----------- | ------------------- | --------- | ----------- |
@@ -90,13 +90,13 @@ When direct TCP probing and TLS validation succeed for private IP addresses (`VA
 
 ---
 
-## JSON Schema Versioning
+## JSON schema versioning
 
 All machine-readable output generated with `--json` contains top-level field `schemaVersion`.
 Current schema version: `1`.
 
 Key schema conventions in `schemaVersion: 1`:
-- `engine` object includes `name` (`NATIVE` or `POWERSHELL_COMPAT`), `version` (`0.1.0`), and engine-specific runtime capability metadata (`powerShellVersion`, `powerShellEdition`, `languageMode`).
+- `engine` object includes `name` (`NATIVE` or `POWERSHELL_COMPAT`), `version` (`v0.1.0` or `v0.2.0-rc.1`), and engine-specific runtime capability metadata (`powerShellVersion`, `powerShellEdition`, `languageMode`).
 - `dns` object includes `status`, `resolverMode` (`GO_BUILTIN`), `queryHostname`, `durationMs`, `addresses`, `aggregateClassification`, `isIpLiteral`.
 - `http` object includes `status`, `aggregateStatus`, `method`, `path`, `durationMs`, and `results` slice containing per-address observations.
 - Unobserved/skipped phases omit optional fields or serialize `results: []`.
