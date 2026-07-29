@@ -1,4 +1,4 @@
-# AZPE (Azure Private Endpoint Connectivity Diagnostic Utility)
+# AZPE: Azure Private Endpoint connectivity diagnostic tool
 
 [![CI](https://github.com/nukabo/azpe/actions/workflows/ci.yml/badge.svg)](https://github.com/nukabo/azpe/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/nukabo/azpe)](https://goreportcard.com/report/github.com/nukabo/azpe)
@@ -8,14 +8,14 @@
 
 ---
 
-## Quick Start
+## Quick start
 
 ```bash
 # 1. Download and run directly (no installation or Azure login required)
 azpe probe myvault.vault.azure.net
 ```
 
-### Example Terminal Output
+### Example terminal output
 
 ```text
 AZPE
@@ -38,7 +38,7 @@ If the application still fails, check its identity and Azure permissions.
 
 ---
 
-## The Problem
+## The problem
 
 Application teams in large enterprises often rely on centrally managed Azure Private Endpoints to access cloud services securely. However, these teams frequently lack access or visibility into:
 - Azure Private DNS zones
@@ -58,54 +58,35 @@ When an application cannot reach an Azure service, engineers commonly cannot dis
 
 `azpe` combines DNS resolution, IP classification, TCP connectivity, TLS validation, and a minimal HTTP health probe into a single plain-language diagnostic assessment.
 
-> **Key Diagnostic Fact**: An `HTTP 403 Forbidden` or `HTTP 401 Unauthorized` response means **the private connection and HTTPS transport work perfectly**. The issue is purely application identity, credentials, or RBAC roles.
+> **Key diagnostic fact**: An `HTTP 403 Forbidden` or `HTTP 401 Unauthorized` response means **the private connection and HTTPS transport work perfectly**. The issue is purely application identity, credentials, or RBAC roles.
 
 ---
 
-## Target User & Requirements
+## Target user & requirements
 
 - Application Engineers & DevOps Practitioners
 - Cloud Reliability Engineers
 - Enterprise Network & Security Operations Teams
 
-**Zero Prerequisites**: Ordinary users do **not** need Go, Docker, Python, Node.js, .NET, Azure CLI, Azure login, or administrator privileges (unless placing the binary in a system-wide `PATH` directory).
+**Zero prerequisites**: Ordinary users do **not** need Go, Docker, Python, Node.js, .NET, Azure CLI, Azure login, or administrator privileges (unless placing the binary in a system-wide `PATH` directory).
 
 ---
 
-## Download & Installation Guide
+## Download & installation guide
 
 Download the appropriate release archive from [GitHub Releases](https://github.com/nukabo/azpe/releases):
 
-| Environment / Platform | Download Asset | What to Use It For |
+| Environment/Platform | Download Asset | What to Use It For |
 | ---------------------- | -------------- | ------------------ |
-| **Windows (Restricted / AVD / AppLocker)** | `azpe-powershell_0.1.1.zip` | Restricted Windows workstations, Azure Virtual Desktop (AVD), or hosts blocking `.exe` files |
 | **Windows (Native Binary)** | `azpe_0.1.1_windows_amd64.zip` | Standard Windows workstations & servers |
 | **Linux (AMD64)** | `azpe_0.1.1_linux_amd64.tar.gz` | Linux VMs, Kubernetes pods, CI/CD runners, container instances |
 | **Linux (ARM64)** | `azpe_0.1.1_linux_arm64.tar.gz` | Linux ARM64 VMs & servers |
 | **macOS (Apple Silicon)** | `azpe_0.1.1_darwin_arm64.tar.gz` | macOS M1/M2/M3/M4 workstations |
 | **macOS (Intel)** | `azpe_0.1.1_darwin_amd64.tar.gz` | macOS Intel workstations |
+| **Windows (Restricted / AVD / AppLocker)** | `azpe-powershell_0.1.1.zip` | Restricted Windows workstations, Azure Virtual Desktop (AVD), or hosts blocking `.exe` files |
 
 ---
-
-### Option A: Windows (PowerShell Client — Restricted / AVD / AppLocker) ⭐ *Recommended for Enterprise*
-
-If your Windows laptop or Azure Virtual Desktop host blocks running unsigned `.exe` files:
-
-1. Download **`azpe-powershell_0.1.1.zip`** from [GitHub Releases](https://github.com/nukabo/azpe/releases).
-2. Right-click the `.zip` file → **Extract All...**
-3. Open PowerShell in the extracted folder and run:
-
-```powershell
-# Load the script
-. .\Invoke-AzpeProbe.ps1
-
-# Run diagnostic probe
-Invoke-AzpeProbe myvault.vault.azure.net
-```
-
----
-
-### Option B: Windows (Native Executable)
+### Option A: Windows (native executable)
 
 1. Download **`azpe_0.1.1_windows_amd64.zip`** from [GitHub Releases](https://github.com/nukabo/azpe/releases).
 2. Right-click → **Extract All...**
@@ -123,7 +104,7 @@ Unblock-File .\azpe.exe
 
 ---
 
-### Option C: Linux / macOS
+### Option B: Linux/macOS
 
 ```bash
 # Download and extract (example for Linux AMD64)
@@ -135,13 +116,32 @@ tar -xzf azpe_0.1.1_linux_amd64.tar.gz
 
 ---
 
-## Verifying Release Artifacts
+### Option C: Windows (PowerShell client — Restricted/AVD/AppLocker) ⭐ *Recommended for Enterprise*
 
-### 1. SHA-256 Checksum Verification
+If your Windows laptop or Azure Virtual Desktop host blocks running unsigned `.exe` files:
+
+1. Download **`azpe-powershell_0.1.1.zip`** from [GitHub Releases](https://github.com/nukabo/azpe/releases).
+2. Right-click the `.zip` file → **Extract All...**
+3. Open PowerShell in the extracted folder and run:
+
+```powershell
+# Load the script
+. .\Invoke-AzpeProbe.ps1
+
+# Run diagnostic probe
+Invoke-AzpeProbe myvault.vault.azure.net
+```
+
+---
+
+
+## Verifying release artifacts
+
+### 1. SHA-256 checksum verification
 
 Every release includes a `checksums.txt` file containing SHA-256 hashes for all native release archives. Verify downloaded archives before extraction:
 
-**Linux / macOS**:
+**Linux/macOS**:
 ```bash
 sha256sum --check checksums.txt
 # Or macOS shasum:
@@ -154,7 +154,7 @@ Get-FileHash .\azpe_0.1.0_windows_amd64.zip -Algorithm SHA256
 ```
 Compare the output with the corresponding hash in `checksums.txt`.
 
-### 2. GitHub Artifact Provenance Attestations
+### 2. GitHub artifact provenance attestations
 
 AZPE releases publish GitHub OIDC build provenance attestations. You can verify that downloaded binaries were produced by official GitHub Actions workflows:
 
@@ -164,7 +164,7 @@ gh attestation verify azpe_0.1.0_linux_amd64.tar.gz --repo nukabo/azpe
 
 ---
 
-## Upgrade & Uninstall
+## Upgrade & uninstall
 
 ### Upgrading AZPE
 To upgrade AZPE, download the new release archive from [GitHub Releases](https://github.com/nukabo/azpe/releases) and replace your existing `azpe` / `azpe.exe` executable file.
@@ -182,7 +182,7 @@ Remove-Item C:\Path\To\azpe.exe
 
 ---
 
-## Critical Security Policies & Disclaimers
+## Critical security policies & disclaimers
 
 > [!IMPORTANT]
 > **No Control-Plane Claims**: AZPE observes connectivity from the workload's current execution environment without Azure control-plane access.
@@ -195,11 +195,11 @@ Remove-Item C:\Path\To\azpe.exe
 > Therefore, AZPE will never claim `Private Endpoint verified`. It states: *The Azure service responded*, *Secure private connection looks correct*, *Private connection is reachable*, or *This workload is not using private DNS*.
 
 > [!WARNING]
-> **Target URL Recommendation**: Avoid placing secrets, tokens, or credentials directly in the target URL. AZPE redacts query parameter values in all terminal and JSON output (e.g. `/path?sig=REDACTED`), but the raw query parameter values are still sent over the network to the target service as part of the requested HTTP URL.
+> **Target URL recommendation**: Avoid placing secrets, tokens, or credentials directly in the target URL. AZPE redacts query parameter values in all terminal and JSON output (e.g. `/path?sig=REDACTED`), but the raw query parameter values are still sent over the network to the target service as part of the requested HTTP URL.
 
 ---
 
-## Usage Guide & Command Options
+## Usage guide & command options
 
 ```bash
 azpe probe <azure-service-hostname-or-url> [flags]
@@ -217,13 +217,13 @@ azpe probe <azure-service-hostname-or-url> [flags]
 
 ---
 
-## Building & Contributing (For Maintainers & Developers)
+## Building & contributing (for maintainers & developers)
 
 ### Prerequisites
 - Go 1.22 or higher
 - Git
 
-### Local Build & Test
+### Local build & test
 
 ```bash
 # Clone repository
