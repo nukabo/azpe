@@ -83,7 +83,7 @@ Download the appropriate release archive from [GitHub Releases](https://github.c
 | **Linux (ARM64)** | `azpe_0.1.1_linux_arm64.tar.gz` | Linux ARM64 VMs & servers |
 | **macOS (Apple Silicon)** | `azpe_0.1.1_darwin_arm64.tar.gz` | macOS M1/M2/M3/M4 workstations |
 | **macOS (Intel)** | `azpe_0.1.1_darwin_amd64.tar.gz` | macOS Intel workstations |
-| **Windows (Restricted / AVD / AppLocker)** | `azpe-powershell_0.1.1.zip` | Restricted Windows workstations, Azure Virtual Desktop (AVD), or hosts blocking `.exe` files |
+| **Windows (Restricted/AVD/AppLocker)** | `azpe-powershell_0.1.1.zip` | Restricted Windows workstations, Azure Virtual Desktop (AVD), or hosts blocking `.exe` files |
 
 ---
 ### Option A: Windows (native executable)
@@ -116,7 +116,7 @@ tar -xzf azpe_0.1.1_linux_amd64.tar.gz
 
 ---
 
-### Option C: Windows (PowerShell client — Restricted/AVD/AppLocker) ⭐ *Recommended for Enterprise*
+### Option C: Windows PowerShell client (Restricted/AVD/AppLocker) ⭐ *Recommended for Enterprise*
 
 If your Windows laptop or Azure Virtual Desktop host blocks running unsigned `.exe` files:
 
