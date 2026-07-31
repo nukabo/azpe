@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/nukabo/azpe/main/docs/azpe-output-v1.schema.json",
+  "title": "AZPE Diagnostic Output Schema v1",
+  "description": "Canonical machine-readable output schema for AZPE (Azure Private Endpoint Troubleshooter)",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "toolVersion",
+    "timestamp",
+    "durationMs",
+    "target",
+    "dns",
+    "address",
+    "tcp",
+    "tls",
+    "http",
+    "assessment",
+    "errors",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "toolVersion": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "durationMs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "target": {
+      "type": "object",
+      "required": ["originalInput", "scheme", "hostname", "port", "requestPath", "targetType"],
+      "properties": {
+        "originalInput": { "type": "string" },
+        "scheme": { "type": "string" },
+        "hostname": { "type": "string" },
+        "port": { "type": "integer" },
+        "requestPath": { "type": "string" },
+        "targetType": { "type": "string" }
+      }
+    },
+    "dns": {
+      "type": "object",
+      "required": ["status", "durationMs", "addresses", "aggregateClassification", "isIpLiteral"],
+      "properties": {
+        "status": { "type": "string" },
+        "durationMs": { "type": "integer" },
+        "addresses": { "type": "array" },
+        "aggregateClassification": { "type": "string" },
+        "isIpLiteral": { "type": "boolean" }
+      }
+    },
+    "address": {
+      "type": "object",
+      "required": ["classification", "addresses", "privateIps", "publicIps"],
+      "properties": {
+        "classification": { "type": "string" },
+        "addresses": { "type": "array" },
+        "privateIps": { "type": "array" },
+        "publicIps": { "type": "array" }
+      }
+    },
+    "tcp": {
+      "type": "object",
+      "required": ["status", "aggregateStatus", "durationMs", "results"],
+      "properties": {
+        "status": { "type": "string" },
+        "aggregateStatus": { "type": "string" },
+        "port": { "type": "integer" },
+        "durationMs": { "type": "integer" },
+        "results": { "type": "array" }
+      }
+    },
+    "tls": {
+      "type": "object",
+      "required": ["status", "aggregateStatus", "serverName", "durationMs", "results"],
+      "properties": {
+        "status": { "type": "string" },
+        "aggregateStatus": { "type": "string" },
+        "serverName": { "type": "string" },
+        "durationMs": { "type": "integer" },
+        "results": { "type": "array" }
+      }
+    },
+    "http": {
+      "type": "object",
+      "required": ["status", "aggregateStatus", "method", "path", "durationMs", "results"],
+      "properties": {
+        "status": { "type": "string" },
+        "aggregateStatus": { "type": "string" },
+        "method": { "type": "string" },
+        "path": { "type": "string" },
+        "durationMs": { "type": "integer" },
+        "results": { "type": "array" }
+      }
+    },
+    "assessment": {
+      "type": "object",
+      "required": ["code", "state", "summary", "likelyOwner"],
+      "properties": {
+        "code": { "type": "string" },
+        "severity": { "type": "string" },
+        "diagnosticPhase": { "type": "string" },
+        "scenario": { "type": "string" },
+        "state": { "type": "string" },
+        "title": { "type": "string" },
+        "explanation": { "type": "string" },
+        "impact": { "type": "string" },
+        "summary": { "type": "string" },
+        "likelyOwner": { "type": "string" },
+        "nextAction": { "type": "string" },
+        "recommendations": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

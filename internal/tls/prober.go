@@ -335,8 +335,16 @@ func ProbeAll(ctx context.Context, prober Prober, tcpObs model.TCPObservation, s
 	failedCount := 0
 
 	for _, tcpRes := range eligible {
-		if ctx != nil && ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled) {
+		if ctx != nil && ctx.Err() != nil {
 			dest := net.JoinHostPort(tcpRes.Address, strconv.Itoa(tcpRes.Port))
+			status := assess.TLSAddrCanceled
+			errCat := "CANCELED"
+			errMsg := "Context canceled"
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				status = assess.TLSAddrHandshakeTimeout
+				errCat = "HANDSHAKE_TIMEOUT"
+				errMsg = "Context deadline exceeded"
+			}
 			results = append(results, model.TLSResultItem{
 				Address:        tcpRes.Address,
 				Version:        tcpRes.Version,
@@ -344,12 +352,13 @@ func ProbeAll(ctx context.Context, prober Prober, tcpObs model.TCPObservation, s
 				Destination:    dest,
 				Port:           tcpRes.Port,
 				ServerName:     serverName,
-				Status:         assess.TLSAddrCanceled,
+				Status:         status,
 				Stage:          "HANDSHAKE",
 				DurationMs:     0,
-				ErrorCategory:  "CANCELED",
-				Error:          "Context canceled",
+				ErrorCategory:  errCat,
+				Error:          errMsg,
 			})
+			failedCount++
 			continue
 		}
 

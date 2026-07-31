@@ -15,7 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Strict compliance with enterprise application controls (AppLocker, WDAC, Constrained Language Mode, Execution Policies). Zero security bypass techniques implemented or documented.
   - Capability detection (`Get-AzpeCapability`) reporting PowerShell version, edition, language mode, `Resolve-DnsName`, `Test-NetConnection`, and `curl.exe`.
   - High-fidelity target parsing, boundary-safe Azure service suffix catalogue, DNS address classification, TCP probing against captured IPs, and direct-IP `--resolve` HTTPS validation via native `curl.exe`.
-  - Full terminal rendering (`-Detailed`) and machine-readable JSON (`-Json`) schema compatibility with engine metadata (`"engine": { "name": "POWERSHELL_COMPAT", "version": "0.2.0-rc.1" }`).
+  - Full terminal rendering (`-Detailed`) and machine-readable JSON (`-Json`) schema compatibility with engine metadata (`"engine": { "name": "POWERSHELL_COMPAT", "version": "VERSION" }`).
   - GitHub Actions CI workflow (`powershell-ci.yml`) and deterministic packaging script (`powershell/build.ps1`).
 
 ---

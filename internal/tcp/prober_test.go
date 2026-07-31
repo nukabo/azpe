@@ -205,3 +205,108 @@ func TestNoSecondDNSLookup_Regression(t *testing.T) {
 		t.Errorf("expected call 10.42.3.8:443, got %s", fake.Calls[1])
 	}
 }
+
+func TestProbeAll_MultiAddressScenarios(t *testing.T) {
+	t.Run("first address fails, second succeeds", func(t *testing.T) {
+		fake := &FakeProber{
+			Responses: map[string]model.TCPResultItem{
+				"10.0.0.1": {Address: "10.0.0.1", Status: assess.TCPAddrConnectionRefused, ErrorCategory: "REFUSED"},
+				"10.0.0.2": {Address: "10.0.0.2", Status: assess.TCPAddrConnected},
+			},
+		}
+		ipObs := []model.IPObservation{
+			{Address: "10.0.0.1", Version: "IPv4", Classification: assess.AddrPrivate},
+			{Address: "10.0.0.2", Version: "IPv4", Classification: assess.AddrPrivate},
+		}
+		obs := ProbeAll(context.Background(), fake, ipObs, 443)
+		if obs.Status != assess.TCPStatusPartial || obs.AggregateStatus != assess.AggregateTCPPartiallyConnected {
+			t.Errorf("expected TCPStatusPartial and AggregateTCPPartiallyConnected, got status %v, agg %v", obs.Status, obs.AggregateStatus)
+		}
+	})
+
+	t.Run("first succeeds, second fails", func(t *testing.T) {
+		fake := &FakeProber{
+			Responses: map[string]model.TCPResultItem{
+				"10.0.0.1": {Address: "10.0.0.1", Status: assess.TCPAddrConnected},
+				"10.0.0.2": {Address: "10.0.0.2", Status: assess.TCPAddrTimedOut, ErrorCategory: "TIMEOUT"},
+			},
+		}
+		ipObs := []model.IPObservation{
+			{Address: "10.0.0.1", Version: "IPv4", Classification: assess.AddrPrivate},
+			{Address: "10.0.0.2", Version: "IPv4", Classification: assess.AddrPrivate},
+		}
+		obs := ProbeAll(context.Background(), fake, ipObs, 443)
+		if obs.Status != assess.TCPStatusPartial || obs.AggregateStatus != assess.AggregateTCPPartiallyConnected {
+			t.Errorf("expected TCPStatusPartial, got %v", obs.Status)
+		}
+	})
+
+	t.Run("all timeout", func(t *testing.T) {
+		fake := &FakeProber{
+			Responses: map[string]model.TCPResultItem{
+				"10.0.0.1": {Address: "10.0.0.1", Status: assess.TCPAddrTimedOut, ErrorCategory: "TIMEOUT"},
+				"10.0.0.2": {Address: "10.0.0.2", Status: assess.TCPAddrTimedOut, ErrorCategory: "TIMEOUT"},
+			},
+		}
+		ipObs := []model.IPObservation{
+			{Address: "10.0.0.1", Version: "IPv4", Classification: assess.AddrPrivate},
+			{Address: "10.0.0.2", Version: "IPv4", Classification: assess.AddrPrivate},
+		}
+		obs := ProbeAll(context.Background(), fake, ipObs, 443)
+		if obs.Status != assess.TCPStatusFailed || obs.AggregateStatus != assess.AggregateTCPNoneConnected {
+			t.Errorf("expected TCPStatusFailed and AggregateTCPNoneConnected, got %v / %v", obs.Status, obs.AggregateStatus)
+		}
+	})
+
+	t.Run("one refused and one timeout", func(t *testing.T) {
+		fake := &FakeProber{
+			Responses: map[string]model.TCPResultItem{
+				"10.0.0.1": {Address: "10.0.0.1", Status: assess.TCPAddrConnectionRefused, ErrorCategory: "REFUSED"},
+				"10.0.0.2": {Address: "10.0.0.2", Status: assess.TCPAddrTimedOut, ErrorCategory: "TIMEOUT"},
+			},
+		}
+		ipObs := []model.IPObservation{
+			{Address: "10.0.0.1", Version: "IPv4", Classification: assess.AddrPrivate},
+			{Address: "10.0.0.2", Version: "IPv4", Classification: assess.AddrPrivate},
+		}
+		obs := ProbeAll(context.Background(), fake, ipObs, 443)
+		if obs.Status != assess.TCPStatusFailed || obs.AggregateStatus != assess.AggregateTCPNoneConnected {
+			t.Errorf("expected TCPStatusFailed, got %v", obs.Status)
+		}
+	})
+
+	t.Run("cancellation during iteration", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Cancel context before iteration
+
+		fake := &FakeProber{}
+		ipObs := []model.IPObservation{
+			{Address: "10.0.0.1", Version: "IPv4", Classification: assess.AddrPrivate},
+			{Address: "10.0.0.2", Version: "IPv4", Classification: assess.AddrPrivate},
+		}
+		obs := ProbeAll(ctx, fake, ipObs, 443)
+		for _, r := range obs.Results {
+			if r.Status != assess.TCPAddrCanceled {
+				t.Errorf("expected status CANCELED, got %v", r.Status)
+			}
+		}
+	})
+
+	t.Run("timeout budget across addresses", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
+		time.Sleep(2 * time.Millisecond)
+		defer cancel()
+
+		fake := &FakeProber{}
+		ipObs := []model.IPObservation{
+			{Address: "10.0.0.1", Version: "IPv4", Classification: assess.AddrPrivate},
+			{Address: "10.0.0.2", Version: "IPv4", Classification: assess.AddrPrivate},
+		}
+		obs := ProbeAll(ctx, fake, ipObs, 443)
+		for _, r := range obs.Results {
+			if r.Status != assess.TCPAddrTimedOut {
+				t.Errorf("expected status TIMEOUT, got %v", r.Status)
+			}
+		}
+	})
+}

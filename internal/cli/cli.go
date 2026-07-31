@@ -137,7 +137,7 @@ func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver, pr
 
 	tgt, err := target.Parse(targetStr)
 	if err != nil {
-		fmt.Fprintf(stderr, "Error parsing target %q: %v\n", targetStr, err)
+		fmt.Fprintf(stderr, "Error parsing target %q: %v\n", target.SanitizeTargetString(targetStr), target.SanitizeErrorString(err.Error()))
 		return ExitUsageOrTargetError
 	}
 
@@ -155,7 +155,7 @@ func runProbe(args []string, stdout, stderr io.Writer, resolver dns.Resolver, pr
 		if tcpObs.Status == assess.TCPStatusSuccess || tcpObs.Status == assess.TCPStatusPartial {
 			tlsObs = tls.ProbeAll(ctx, tlsProber, tcpObs, tgt.Hostname)
 			if !*noHTTPFlag && (tlsObs.Status == assess.TLSStatusSuccess || tlsObs.Status == assess.TLSStatusPartial) {
-				httpObs = http.ProbeAll(ctx, httpProber, tlsObs, tgt.RequestPath, tgt.Scheme, tgt.Port, tgt.Hostname)
+				httpObs = http.ProbeAll(ctx, httpProber, tlsObs, tgt.RawRequestPath(), tgt.Scheme, tgt.Port, tgt.Hostname)
 			} else if *noHTTPFlag {
 				httpObs = model.HTTPObservation{
 					Status:          assess.HTTPStatusSkipped,

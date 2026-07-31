@@ -13,6 +13,15 @@ func evaluateTCPUnreachable(tgt *target.Target, tcpObs MinimalTCPObservation) Ev
 		title = "The private addresses cannot be reached"
 	}
 	var lines []string
+	code := CodeTCPFailure
+	domFail := determineDominantTCPFailureStatus(tcpObs.GetResults())
+	switch domFail {
+	case TCPAddrTimedOut:
+		code = CodeTCPTimeout
+	case TCPAddrConnectionRefused:
+		code = CodeTCPRefused
+	}
+
 	for _, r := range tcpObs.GetResults() {
 		failReason := formatTCPFailureReason(r.GetStatus(), r.GetErrorCategory())
 		if len(tcpObs.GetResults()) == 1 {
@@ -30,6 +39,7 @@ func evaluateTCPUnreachable(tgt *target.Target, tcpObs MinimalTCPObservation) Ev
 	imp := "The application cannot currently connect to the Azure service on the requested port."
 	sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      %s\n\nWhat to do:\nSend this result to your network team.", destBlock, connStatusStr)
 	return Evaluation{
+		Code:        code,
 		Scenario:    ScenarioPrivateTCPUnreachable,
 		ExitCode:    5,
 		Title:       title,
@@ -56,6 +66,7 @@ func evaluateTCPPartial(tgt *target.Target, tcpObs MinimalTCPObservation) Evalua
 	imp := "The application may behave intermittently depending on which address it uses."
 	sum := fmt.Sprintf("%s\n\nThe application may work intermittently depending on which address it uses.\n\nWhat to do:\nSend this result to your network team.", destBlock)
 	return Evaluation{
+		Code:        CodeTCPFailure,
 		Scenario:    ScenarioPrivateTCPPartial,
 		ExitCode:    8,
 		Title:       "Some private addresses cannot be reached",
@@ -95,4 +106,26 @@ func formatShortTCPFailure(status TCPAddressStatus) string {
 	default:
 		return "Failed"
 	}
+}
+
+func determineDominantTCPFailureStatus(results []MinimalTCPResultItem) TCPAddressStatus {
+	if len(results) == 0 {
+		return TCPAddrError
+	}
+	prec := map[TCPAddressStatus]int{
+		TCPAddrTimedOut:          1,
+		TCPAddrConnectionRefused: 2,
+		TCPAddrUnreachable:       3,
+		TCPAddrError:             4,
+	}
+	dominant := results[0].GetStatus()
+	bestRank := prec[dominant]
+	for _, r := range results[1:] {
+		st := r.GetStatus()
+		if rank, ok := prec[st]; ok && (bestRank == 0 || rank < bestRank) {
+			dominant = st
+			bestRank = rank
+		}
+	}
+	return dominant
 }

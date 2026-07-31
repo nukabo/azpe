@@ -18,6 +18,16 @@ type Target struct {
 	RequestPath        string             `json:"requestPath"`
 	TargetType         TargetType         `json:"targetType"`
 	AzureServiceFamily AzureServiceFamily `json:"azureServiceFamily,omitempty"`
+
+	rawRequestPath string
+}
+
+// RawRequestPath returns the original unredacted path and query string for executing the network request.
+func (t *Target) RawRequestPath() string {
+	if t.rawRequestPath != "" {
+		return t.rawRequestPath
+	}
+	return t.RequestPath
 }
 
 // Parse takes a raw input string and normalizes it into a Target model.
@@ -52,10 +62,6 @@ func Parse(rawInput string) (*Target, error) {
 	u, err := url.Parse(rawToParse)
 	if err != nil {
 		return nil, fmt.Errorf("malformed target URL: %w", err)
-	}
-
-	if u.User != nil {
-		return nil, fmt.Errorf("URLs containing embedded credentials are not allowed")
 	}
 
 	scheme := strings.ToLower(u.Scheme)
@@ -108,48 +114,54 @@ func Parse(rawInput string) (*Target, error) {
 		}
 	}
 
-	requestPath := u.Path
+	rawPath := u.Path
 	if u.RawQuery != "" {
-		requestPath += "?" + u.RawQuery
+		rawPath += "?" + u.RawQuery
 	}
-	if requestPath == "" {
-		requestPath = "/"
+	if rawPath == "" {
+		rawPath = "/"
 	}
-	if !strings.HasPrefix(requestPath, "/") {
-		requestPath = "/" + requestPath
+	if !strings.HasPrefix(rawPath, "/") {
+		rawPath = "/" + rawPath
 	}
+
+	redactedPath := RedactQueryValues(rawPath)
+	sanitizedInput := SanitizeTargetString(trimmed)
 
 	targetType, family := ClassifyTarget(cleanHostname)
 
 	return &Target{
-		OriginalInput:      trimmed,
+		OriginalInput:      sanitizedInput,
 		Scheme:             scheme,
 		Hostname:           cleanHostname,
 		Port:               port,
-		RequestPath:        requestPath,
+		RequestPath:        redactedPath,
+		rawRequestPath:     rawPath,
 		TargetType:         targetType,
 		AzureServiceFamily: family,
 	}, nil
 }
 
-// RedactQueryValues redacts query parameter values in request URIs or Location headers.
-func RedactQueryValues(path string) string {
-	idx := strings.Index(path, "?")
+// RedactQueryValues redacts query parameter values in request URIs or Location headers and strips fragments.
+func RedactQueryValues(pathStr string) string {
+	if pathStr == "" {
+		return ""
+	}
+
+	// Strip fragment if present
+	if fragIdx := strings.Index(pathStr, "#"); fragIdx != -1 {
+		pathStr = pathStr[:fragIdx]
+	}
+
+	idx := strings.Index(pathStr, "?")
 	if idx == -1 {
-		return path
+		return pathStr
 	}
 
-	basePath := path[:idx]
-	queryStr := path[idx+1:]
+	basePath := pathStr[:idx]
+	queryStr := pathStr[idx+1:]
 	if queryStr == "" {
-		return path
-	}
-
-	// Preserve hash fragment separation if any
-	fragment := ""
-	if fragIdx := strings.Index(queryStr, "#"); fragIdx != -1 {
-		fragment = queryStr[fragIdx:]
-		queryStr = queryStr[:fragIdx]
+		return pathStr
 	}
 
 	pairs := strings.Split(queryStr, "&")
@@ -167,7 +179,82 @@ func RedactQueryValues(path string) string {
 		}
 	}
 
-	return basePath + "?" + strings.Join(redactedPairs, "&") + fragment
+	return basePath + "?" + strings.Join(redactedPairs, "&")
+}
+
+// SanitizeTargetString takes a raw input target or URL string and formats a user-visible version with
+// query parameter values replaced with REDACTED, user credentials removed, and fragments stripped.
+func SanitizeTargetString(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+
+	if fragIdx := strings.Index(trimmed, "#"); fragIdx != -1 {
+		trimmed = trimmed[:fragIdx]
+	}
+
+	hasScheme := strings.Contains(trimmed, "://")
+	rawToParse := trimmed
+	if !hasScheme {
+		if strings.HasPrefix(trimmed, "/") {
+			return RedactQueryValues(trimmed)
+		}
+		rawToParse = "https://" + trimmed
+	}
+
+	u, err := url.Parse(rawToParse)
+	if err != nil || u.Host == "" {
+		return RedactQueryValues(stripUserInfoFallback(trimmed))
+	}
+
+	u.User = nil
+	u.Fragment = ""
+
+	pathWithQuery := u.Path
+	if u.RawQuery != "" {
+		pathWithQuery += "?" + u.RawQuery
+	}
+
+	redactedPathWithQuery := RedactQueryValues(pathWithQuery)
+
+	if !hasScheme {
+		hostPart := u.Host
+		if redactedPathWithQuery != "" && redactedPathWithQuery != "/" {
+			return hostPart + redactedPathWithQuery
+		}
+		return hostPart
+	}
+
+	scheme := strings.ToLower(u.Scheme)
+	if redactedPathWithQuery != "" && redactedPathWithQuery != "/" {
+		return scheme + "://" + u.Host + redactedPathWithQuery
+	}
+	return scheme + "://" + u.Host
+}
+
+func stripUserInfoFallback(s string) string {
+	if atIdx := strings.Index(s, "@"); atIdx != -1 {
+		if schemeIdx := strings.Index(s, "://"); schemeIdx != -1 && schemeIdx < atIdx {
+			return s[:schemeIdx+3] + s[atIdx+1:]
+		}
+		return s[atIdx+1:]
+	}
+	return s
+}
+
+// SanitizeErrorString redacts query values and user credentials from error string messages.
+func SanitizeErrorString(errStr string) string {
+	if errStr == "" {
+		return ""
+	}
+	sanitized := RedactQueryValues(errStr)
+	if atIdx := strings.Index(sanitized, "@"); atIdx != -1 {
+		if schemeIdx := strings.LastIndex(sanitized[:atIdx], "://"); schemeIdx != -1 {
+			sanitized = sanitized[:schemeIdx+3] + sanitized[atIdx+1:]
+		}
+	}
+	return sanitized
 }
 
 // SanitizeLocation strips user credentials (userinfo) and redacts query parameter values from Location headers.
@@ -175,12 +262,7 @@ func SanitizeLocation(locStr string) string {
 	if locStr == "" {
 		return ""
 	}
-	u, err := url.Parse(locStr)
-	if err != nil {
-		return RedactQueryValues(locStr)
-	}
-	u.User = nil // Strip userinfo (e.g. user:password@)
-	return RedactQueryValues(u.String())
+	return SanitizeTargetString(locStr)
 }
 
 func validateHostnameOrIP(host string) error {

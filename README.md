@@ -59,7 +59,7 @@ When an application cannot reach an Azure service, engineers commonly cannot dis
 
 `azpe` combines DNS resolution, IP classification, TCP connectivity, TLS validation, and a minimal HTTP health probe into a single plain-language diagnostic assessment.
 
-> **Key diagnostic fact**: An `HTTP 403 Forbidden` or `HTTP 401 Unauthorized` response means **the private connection and HTTPS transport work perfectly**. The issue is purely application identity, credentials, or RBAC roles.
+> **Key diagnostic fact**: An `HTTP 403 Forbidden` or `HTTP 401 Unauthorized` response indicates that **TCP, TLS, and HTTP transport to a responder for this hostname succeeded**. A 401 or 403 usually indicates authentication or authorization, although an intermediary may have generated the response. AZPE does not verify Azure control-plane configuration.
 
 ---
 
@@ -79,17 +79,17 @@ Download the appropriate release archive from [GitHub Releases](https://github.c
 
 | Environment/Platform | Download Asset | What to Use It For |
 | ---------------------- | -------------- | ------------------ |
-| **Windows (Native Binary)** | `azpe_0.1.1_windows_amd64.zip` | Standard Windows workstations & servers |
-| **Linux (AMD64)** | `azpe_0.1.1_linux_amd64.tar.gz` | Linux VMs, Kubernetes pods, CI/CD runners, container instances |
-| **Linux (ARM64)** | `azpe_0.1.1_linux_arm64.tar.gz` | Linux ARM64 VMs & servers |
-| **macOS (Apple Silicon)** | `azpe_0.1.1_darwin_arm64.tar.gz` | macOS M1/M2/M3/M4 workstations |
-| **macOS (Intel)** | `azpe_0.1.1_darwin_amd64.tar.gz` | macOS Intel workstations |
-| **Windows (Restricted/AVD/AppLocker)** | `azpe-powershell_0.1.1.zip` | Restricted Windows workstations, Azure Virtual Desktop (AVD), or hosts blocking `.exe` files |
+| **Windows (Native Binary)** | `azpe_VERSION_windows_amd64.zip` | Standard Windows workstations & servers |
+| **Linux (AMD64)** | `azpe_VERSION_linux_amd64.tar.gz` | Linux VMs, Kubernetes pods, CI/CD runners, container instances |
+| **Linux (ARM64)** | `azpe_VERSION_linux_arm64.tar.gz` | Linux ARM64 VMs & servers |
+| **macOS (Apple Silicon)** | `azpe_VERSION_darwin_arm64.tar.gz` | macOS M1/M2/M3/M4 workstations |
+| **macOS (Intel)** | `azpe_VERSION_darwin_amd64.tar.gz` | macOS Intel workstations |
+| **Windows (Restricted/AVD/AppLocker)** | `azpe-powershell_VERSION.zip` | Restricted Windows workstations, Azure Virtual Desktop (AVD), or hosts blocking `.exe` files |
 
 ---
 ### Option A: Windows (native executable)
 
-1. Download **`azpe_0.1.1_windows_amd64.zip`** from [GitHub Releases](https://github.com/nukabo/azpe/releases).
+1. Download **`azpe_VERSION_windows_amd64.zip`** from [GitHub Releases](https://github.com/nukabo/azpe/releases).
 2. Right-click → **Extract All...**
 3. Open PowerShell in the extracted folder:
 
@@ -101,7 +101,7 @@ Unblock-File .\azpe.exe
 .\azpe.exe probe myvault.vault.azure.net
 ```
 
-> **Note**: If Windows shows `Access is denied` due to AppLocker policies, switch to **Option A (PowerShell Client)** above.
+> **Note**: If Windows shows `Access is denied` due to AppLocker policies, switch to **Option C (Windows PowerShell client)** below.
 
 ---
 
@@ -109,7 +109,7 @@ Unblock-File .\azpe.exe
 
 ```bash
 # Download and extract (example for Linux AMD64)
-tar -xzf azpe_0.1.1_linux_amd64.tar.gz
+tar -xzf azpe_VERSION_linux_amd64.tar.gz
 
 # Run probe
 ./azpe probe myvault.vault.azure.net
@@ -121,7 +121,7 @@ tar -xzf azpe_0.1.1_linux_amd64.tar.gz
 
 If your Windows laptop or Azure Virtual Desktop host blocks running unsigned `.exe` files:
 
-1. Download **`azpe-powershell_0.1.1.zip`** from [GitHub Releases](https://github.com/nukabo/azpe/releases).
+1. Download **`azpe-powershell_VERSION.zip`** from [GitHub Releases](https://github.com/nukabo/azpe/releases).
 2. Right-click the `.zip` file → **Extract All...**
 3. Open PowerShell in the extracted folder and run:
 
@@ -151,7 +151,7 @@ shasum -a 256 -c checksums.txt
 
 **Windows (PowerShell)**:
 ```powershell
-Get-FileHash .\azpe_0.1.0_windows_amd64.zip -Algorithm SHA256
+Get-FileHash .\azpe_VERSION_windows_amd64.zip -Algorithm SHA256
 ```
 Compare the output with the corresponding hash in `checksums.txt`.
 
@@ -160,7 +160,7 @@ Compare the output with the corresponding hash in `checksums.txt`.
 AZPE releases publish GitHub OIDC build provenance attestations. You can verify that downloaded binaries were produced by official GitHub Actions workflows:
 
 ```bash
-gh attestation verify azpe_0.1.0_linux_amd64.tar.gz --repo nukabo/azpe
+gh attestation verify azpe_VERSION_linux_amd64.tar.gz --repo nukabo/azpe
 ```
 
 ---
@@ -189,14 +189,24 @@ Remove-Item C:\Path\To\azpe.exe
 > **No control-plane claims**: AZPE observes connectivity from the workload's current execution environment without Azure control-plane access.
 > - An approved Azure Private Endpoint configuration in the Azure portal **does not prove workload connectivity** from your environment.
 > - Observing resolution to a private IP address is **evidence**, not formal proof, that the target is using private DNS.
-> - A valid TLS connection proves that the certificate chain is trusted and matches the hostname.
-> - An HTTP 401 or 403 status response **proves end-to-end HTTPS transport works**, but that the request lacks valid credentials or authorization.
+> - A valid TLS connection indicates that the certificate chain is trusted and matches the hostname.
+> - An HTTP 401 or 403 status response indicates that **TCP, TLS, and HTTP transport to a responder for this hostname succeeded**, although an intermediary may have generated the response.
 > - Certificate validation is **NEVER** disabled (`InsecureSkipVerify: false`).
 > 
 > Therefore, AZPE will never claim `Private Endpoint verified`. It states: *The Azure service responded*, *Secure private connection looks correct*, *Private connection is reachable*, or *This workload is not using private DNS*.
 
 > [!WARNING]
 > **Target URL recommendation**: Avoid placing secrets, tokens, or credentials directly in the target URL. AZPE redacts query parameter values in all terminal and JSON output (e.g. `/path?sig=REDACTED`), but the raw query parameter values are still sent over the network to the target service as part of the requested HTTP URL.
+
+---
+
+## Limitations
+
+- AZPE reports the path from the environment where it runs.
+- Success from one environment does not prove success from another.
+- Private address resolution does not prove that the address belongs to the intended Private Endpoint.
+- Proxies, firewalls, gateways, and TLS inspection may affect interpretation.
+- AZPE does not inspect Azure resources or control-plane configuration.
 
 ---
 
@@ -210,11 +220,24 @@ azpe probe <azure-service-hostname-or-url> [flags]
 
 | Flag | Description |
 | ---- | ----------- |
-| `--json` | Output machine-readable JSON (`schemaVersion: 1`) |
+| `--json` | Output machine-readable JSON (`schemaVersion: 1`, see [docs/azpe-output-v1.schema.json](docs/azpe-output-v1.schema.json)) |
 | `--details` | Multi-section terminal output (Target, DNS, Connection, TLS, HTTP, Tests, Assessment) |
 | `--timeout <duration>` | Operation deadline timeout (default: `5s`) |
 | `--no-http` | Skip minimal HTTP probe phase and return Phase 4 TLS results |
 | `--no-color` | Disable ANSI colorized terminal output |
+
+### Machine-readable JSON output (`--json`)
+
+When invoked with `--json`, AZPE writes canonical JSON output to standard output (`stdout`) conforming to `schemaVersion: 1`. Operational logs or errors are routed to `stderr`.
+
+Key JSON fields:
+- `schemaVersion`: Numeric schema version (always `1`).
+- `toolVersion`: AZPE binary version string.
+- `timestamp`: UTC ISO 8601 timestamp of execution.
+- `durationMs`: Total duration in milliseconds.
+- `target`: Sanitized target input details (secrets redacted).
+- `dns`, `tcp`, `tls`, `http`: Phase observation arrays and aggregate statuses.
+- `assessment`: Stable diagnostic code (`assessment.code`), severity (`assessment.severity`), phase (`assessment.diagnosticPhase`), summary, and recommendations array (`assessment.recommendations`).
 
 ---
 
