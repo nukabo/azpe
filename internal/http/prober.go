@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -31,7 +32,12 @@ type OSHTTPProber struct {
 	// RootCAs is optional and used for test injection when non-nil.
 	// In production, RootCAs is nil so Go uses the operating system trust store.
 	RootCAs *x509.CertPool
+	// Transport is optional and used for test injection when non-nil.
+	Transport http.RoundTripper
 }
+
+// MaxResponseBodyReadBytes is the maximum number of response body bytes read for health evaluation.
+const MaxResponseBodyReadBytes = 4096
 
 // ProbeHTTP executes a single unauthenticated HTTPS GET request directly to target IP and port.
 func (p *OSHTTPProber) ProbeHTTP(ctx context.Context, ipStr string, port int, serverName string, requestPath string, scheme string) model.HTTPResultItem {
@@ -72,11 +78,17 @@ func (p *OSHTTPProber) ProbeHTTP(ctx context.Context, ipStr string, port int, se
 	}
 	defer tr.CloseIdleConnections()
 
+	var clientTransport http.RoundTripper = tr
+	if p.Transport != nil {
+		clientTransport = p.Transport
+	}
+
 	client := &http.Client{
-		Transport: tr,
+		Transport: clientTransport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
+		Jar: nil, // explicitly no cookie jar
 	}
 
 	reqURL := fmt.Sprintf("%s://%s%s", scheme, dest, requestPath)
@@ -97,7 +109,7 @@ func (p *OSHTTPProber) ProbeHTTP(ctx context.Context, ipStr string, port int, se
 			DurationMs:       0,
 			FailureStage:     "REQUEST_CREATION",
 			ErrorCategory:    "ERROR",
-			Error:            err.Error(),
+			Error:            target.SanitizeErrorString(err.Error()),
 		}
 	}
 
@@ -132,15 +144,15 @@ func (p *OSHTTPProber) ProbeHTTP(ctx context.Context, ipStr string, port int, se
 		}
 	}
 
-	// Read body up to 4 KiB limit and discard
-	bodyReader := io.LimitReader(resp.Body, 4097)
+	// Read body up to MaxResponseBodyReadBytes limit and discard
+	bodyReader := io.LimitReader(resp.Body, int64(MaxResponseBodyReadBytes+1))
 	bodyBytes, _ := io.ReadAll(bodyReader)
 	resp.Body.Close()
 
 	readLen := len(bodyBytes)
 	truncated := false
-	if readLen > 4096 {
-		readLen = 4096
+	if readLen > MaxResponseBodyReadBytes {
+		readLen = MaxResponseBodyReadBytes
 		truncated = true
 	}
 
@@ -210,7 +222,12 @@ func CategorizeHTTPError(ctx context.Context, err error) (assess.HTTPAddressStat
 		return assess.HTTPAddrResponded, "COMPLETE", "", ""
 	}
 
-	sanitizedErr := strings.TrimSpace(err.Error())
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		urlErr.URL = target.SanitizeTargetString(urlErr.URL)
+	}
+
+	sanitizedErr := target.SanitizeErrorString(strings.TrimSpace(err.Error()))
 
 	if ctx != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return assess.HTTPAddrTimeout, "RESPONSE", "TIMEOUT", sanitizedErr
@@ -408,9 +425,17 @@ func ProbeAll(ctx context.Context, prober Prober, tlsObs model.TLSObservation, r
 	failedCount := 0
 
 	for _, tlsRes := range eligible {
-		if ctx != nil && ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled) {
+		if ctx != nil && ctx.Err() != nil {
 			dest := net.JoinHostPort(tlsRes.Address, strconv.Itoa(tlsRes.Port))
 			sanitizedURI := target.RedactQueryValues(requestPath)
+			status := assess.HTTPAddrCanceled
+			errCat := "CANCELED"
+			errMsg := "Context canceled"
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				status = assess.HTTPAddrTimeout
+				errCat = "TIMEOUT"
+				errMsg = "Context deadline exceeded"
+			}
 			results = append(results, model.HTTPResultItem{
 				Address:          tlsRes.Address,
 				Version:          tlsRes.Version,
@@ -421,13 +446,14 @@ func ProbeAll(ctx context.Context, prober Prober, tlsObs model.TLSObservation, r
 				Host:             serverName,
 				Method:           "GET",
 				RequestURI:       sanitizedURI,
-				Status:           assess.HTTPAddrCanceled,
+				Status:           status,
 				ResponseCategory: assess.HTTPCatNoResponse,
 				DurationMs:       0,
 				FailureStage:     "RESPONSE",
-				ErrorCategory:    "CANCELED",
-				Error:            "Context canceled",
+				ErrorCategory:    errCat,
+				Error:            errMsg,
 			})
+			failedCount++
 			continue
 		}
 

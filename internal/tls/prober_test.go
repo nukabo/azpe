@@ -322,3 +322,71 @@ func TestLocalTLSServer_Integration_UntrustedCertificate(t *testing.T) {
 		t.Errorf("expected TLSAddrUntrustedCertificate, got %v (err: %s)", res.Status, res.Error)
 	}
 }
+
+func TestTLS_DirectHostnameVerification(t *testing.T) {
+	validHostname := "azpe-test.example"
+	wrongHostname := "wrong-name.example"
+
+	_, tlsCert, rootPool := generateTestCAAndCert(t, validHostname, false, false)
+
+	listener, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{Certificates: []tls.Certificate{tlsCert}})
+	if err != nil {
+		t.Fatalf("failed to start TLS listener: %v", err)
+	}
+	defer listener.Close()
+
+	host, portStr, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		t.Fatalf("failed to split host/port: %v", err)
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		t.Fatalf("failed to parse port: %v", err)
+	}
+
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			_ = conn.(*tls.Conn).Handshake()
+			_ = conn.Close()
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// 1. Invoke with matching hostname azpe-test.example over listener IP address
+	validProber := &OSTLSProber{RootCAs: rootPool}
+	resValid := validProber.ProbeTLS(ctx, host, port, validHostname)
+	if resValid.Status != assess.TLSAddrValid {
+		t.Fatalf("expected TLSAddrValid for matching hostname %s over IP %s, got %v (err: %s)", validHostname, host, resValid.Status, resValid.Error)
+	}
+	if resValid.HostnameValid == nil || !*resValid.HostnameValid {
+		t.Errorf("expected HostnameValid=true for matching hostname")
+	}
+	if resValid.CertificateTrusted == nil || !*resValid.CertificateTrusted {
+		t.Errorf("expected CertificateTrusted=true for valid CA trust pool")
+	}
+
+	// 2. Invoke with mismatching hostname wrong-name.example over listener IP address
+	resMismatch := validProber.ProbeTLS(ctx, host, port, wrongHostname)
+	if resMismatch.Status != assess.TLSAddrHostnameMismatch {
+		t.Fatalf("expected TLSAddrHostnameMismatch for wrong hostname %s over IP %s, got %v (err: %s)", wrongHostname, host, resMismatch.Status, resMismatch.Error)
+	}
+	if resMismatch.HostnameValid == nil || *resMismatch.HostnameValid {
+		t.Errorf("expected HostnameValid=false for mismatching hostname")
+	}
+
+	// 3. Verify certificate trust verification is enabled (untrusted pool fails)
+	untrustedProber := &OSTLSProber{RootCAs: x509.NewCertPool()}
+	resUntrusted := untrustedProber.ProbeTLS(ctx, host, port, validHostname)
+	if resUntrusted.Status != assess.TLSAddrUntrustedCertificate {
+		t.Fatalf("expected TLSAddrUntrustedCertificate when CA trust pool is empty, got %v", resUntrusted.Status)
+	}
+	if resUntrusted.CertificateTrusted == nil || *resUntrusted.CertificateTrusted {
+		t.Errorf("expected CertificateTrusted=false when CA trust pool is empty")
+	}
+}

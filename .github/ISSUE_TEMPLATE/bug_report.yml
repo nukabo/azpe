@@ -26,7 +26,7 @@ body:
       description: Where was AZPE executed? (e.g., Linux VM, AKS Pod, Azure App Service, macOS, Windows PowerShell)
       placeholder: |
         OS: Linux / AKS Pod
-        AZPE Version: azpe v0.1.0
+        AZPE Version: azpe VERSION
     validations:
       required: true
 

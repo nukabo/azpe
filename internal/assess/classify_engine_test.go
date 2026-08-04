@@ -112,6 +112,7 @@ func (m mockHTTPItem) GetStatusText() string                            { return
 func (m mockHTTPItem) GetResponseCategory() assess.HTTPResponseCategory { return m.category }
 func (m mockHTTPItem) GetDurationMs() int64                             { return m.duration }
 func (m mockHTTPItem) GetRedirectFollowed() bool                        { return m.redirect }
+func (m mockHTTPItem) GetLocation() string                              { return "" }
 func (m mockHTTPItem) GetErrorCategory() string                         { return m.errCat }
 func (m mockHTTPItem) GetError() string                                 { return m.err }
 

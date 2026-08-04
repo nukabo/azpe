@@ -11,12 +11,12 @@ An official PowerShell compatibility client for **AZPE** (Azure Private Endpoint
 
 ## Technical identity & guarantees
 
-- **Engine name**: `POWERSHELL_COMPAT` (`v0.2.0-rc.1`)
+- **Engine name**: `POWERSHELL_COMPAT` (`VERSION`)
 - **Reference implementation**: Native Go binary (`NATIVE`) remains the reference implementation and highest-fidelity engine.
 - **No security-control bypass**: Operates strictly within enterprise security controls. Does **NOT** bypass, evade, or weaken AppLocker, WDAC, Microsoft Defender, SmartScreen, PowerShell Execution Policies, or Constrained Language Mode (CLM).
 - **Constrained Language Mode**: Detects Constrained Language Mode and degrades safely where restricted operations are unavailable.
 - **TCP timeout behavior**: In PowerShell compatibility mode, the Windows TCP diagnostic command (`Test-NetConnection`) may exceed `-TimeoutSeconds` in some environments.
-- **Zero credentials / Zero Azure login**: Operates purely out-of-band against DNS and network sockets. Never requires `az login`, `Connect-AzAccount`, or Azure subscriptions.
+- **Zero credentials / Zero Azure login**: Operates out-of-band against DNS and network sockets. Never requires `az login`, `Connect-AzAccount`, or Azure subscriptions.
 
 ---
 
@@ -69,7 +69,7 @@ Invoke-AzpeProbe [-Target] <string> [-TimeoutSeconds <int>] [-Detailed] [-Json] 
 
 For enterprise deployment in AppLocker/WDAC governed environments:
 
-1. Build or download the official release assets (`azpe-powershell_0.2.0-rc.1.zip`).
+1. Build or download the official release assets (`azpe-powershell_VERSION.zip`).
 2. Sign `Azpe.psd1`, `Azpe.psm1`, `Public/*.ps1`, `Private/*.ps1`, and `Invoke-AzpeProbe.ps1` with your organization's approved Enterprise Code-Signing Certificate:
    ```powershell
    Set-AuthenticodeSignature -FilePath .\Invoke-AzpeProbe.ps1 -Certificate (Get-Item Cert:\CurrentUser\My\<Thumbprint>)

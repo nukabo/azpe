@@ -38,7 +38,7 @@ AZPE strictly evaluates certificate trust against the host execution environment
 
 ## 5. Never confuse network success with application authorization
 
-A successful TCP connection or valid TLS handshake does not guarantee application access. Conversely, an HTTP 401 or 403 status code proves that the network path and service are healthy, but credential/identity configuration is failing. AZPE evaluates network path health independently from application authorization.
+A successful TCP connection or valid TLS handshake does not guarantee application access. Conversely, an HTTP 401 or 403 status code indicates that TCP, TLS, and HTTP transport to a responder for this hostname succeeded, although an intermediary may have generated the response. AZPE evaluates network path health independently from application authorization.
 
 ---
 
@@ -57,7 +57,7 @@ azpe probe <target>
 ```
 
 > [!NOTE]
-> **PowerShell compatibility client (`POWERSHELL_COMPAT`)**: For restricted Windows environments (e.g., Azure Virtual Desktop, AppLocker-managed session hosts) where arbitrary native `.exe` binaries are restricted, AZPE provides an official PowerShell compatibility client (`Invoke-AzpeProbe`). It adheres strictly to enterprise application controls and reports capability metadata (`"engine": { "name": "POWERSHELL_COMPAT", "version": "0.2.0-rc.1" }`).
+> **PowerShell compatibility client (`POWERSHELL_COMPAT`)**: For restricted Windows environments (e.g., Azure Virtual Desktop, AppLocker-managed session hosts) where arbitrary native `.exe` binaries are restricted, AZPE provides an official PowerShell compatibility client (`Invoke-AzpeProbe`). It adheres strictly to enterprise application controls and reports capability metadata (`"engine": { "name": "POWERSHELL_COMPAT", "version": "VERSION" }`).
 
 ---
 

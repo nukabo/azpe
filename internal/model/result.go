@@ -322,6 +322,13 @@ func (r HTTPResultItem) GetRedirectFollowed() bool {
 	return r.RedirectFollowed
 }
 
+func (r HTTPResultItem) GetLocation() string {
+	if r.Headers != nil {
+		return r.Headers.Location
+	}
+	return ""
+}
+
 func (r HTTPResultItem) GetErrorCategory() string {
 	return r.ErrorCategory
 }
@@ -363,14 +370,18 @@ func (h HTTPObservation) GetResults() []assess.MinimalHTTPResultItem {
 
 // AssessmentInfo summarizes findings, likely ownership, recommendations, and UX scenario.
 type AssessmentInfo struct {
-	Scenario    assess.AssessmentScenario `json:"scenario,omitempty"`
-	State       assess.AssessmentState    `json:"state"`
-	Title       string                    `json:"title,omitempty"`
-	Explanation string                    `json:"explanation,omitempty"`
-	Impact      string                    `json:"impact,omitempty"`
-	Summary     string                    `json:"summary"`
-	LikelyOwner assess.LikelyOwner        `json:"likelyOwner"`
-	NextAction  string                    `json:"nextAction,omitempty"`
+	Code            assess.AssessmentCode     `json:"code"`
+	Severity        string                    `json:"severity,omitempty"`
+	DiagnosticPhase string                    `json:"diagnosticPhase,omitempty"`
+	Scenario        assess.AssessmentScenario `json:"scenario,omitempty"`
+	State           assess.AssessmentState    `json:"state"`
+	Title           string                    `json:"title,omitempty"`
+	Explanation     string                    `json:"explanation,omitempty"`
+	Impact          string                    `json:"impact,omitempty"`
+	Summary         string                    `json:"summary"`
+	LikelyOwner     assess.LikelyOwner        `json:"likelyOwner"`
+	NextAction      string                    `json:"nextAction,omitempty"`
+	Recommendations []string                  `json:"recommendations,omitempty"`
 }
 
 // NewResultFromDNSAndTCPAndTLSAndHTTP evaluates all probe observations and builds the diagnostic Result.
@@ -389,21 +400,21 @@ func NewResultFromDNSAndTCPAndTLSAndHTTP(tgt *target.Target, startTime time.Time
 
 	errorsList := []string{}
 	if dnsObs.ErrorMessage != "" && eval.Scenario == assess.ScenarioDNSLookupFailed {
-		errorsList = append(errorsList, dnsObs.ErrorMessage)
+		errorsList = append(errorsList, target.SanitizeErrorString(dnsObs.ErrorMessage))
 	}
 	for _, tcpRes := range tcpObs.Results {
 		if tcpRes.Error != "" {
-			errorsList = append(errorsList, tcpRes.Error)
+			errorsList = append(errorsList, target.SanitizeErrorString(tcpRes.Error))
 		}
 	}
 	for _, tlsRes := range tlsObs.Results {
 		if tlsRes.Error != "" {
-			errorsList = append(errorsList, tlsRes.Error)
+			errorsList = append(errorsList, target.SanitizeErrorString(tlsRes.Error))
 		}
 	}
 	for _, httpRes := range httpObs.Results {
 		if httpRes.Error != "" {
-			errorsList = append(errorsList, httpRes.Error)
+			errorsList = append(errorsList, target.SanitizeErrorString(httpRes.Error))
 		}
 	}
 
@@ -457,14 +468,23 @@ func NewResultFromDNSAndTCPAndTLSAndHTTP(tgt *target.Target, startTime time.Time
 		TLS:     tlsObs,
 		HTTP:    httpObs,
 		Assessment: AssessmentInfo{
-			Scenario:    eval.Scenario,
-			State:       eval.State,
-			Title:       eval.Title,
-			Explanation: eval.Explanation,
-			Impact:      eval.Impact,
-			Summary:     eval.Summary,
-			LikelyOwner: eval.LikelyOwner,
-			NextAction:  eval.NextAction,
+			Code:            eval.Code,
+			Severity:        eval.Code.Severity(),
+			DiagnosticPhase: eval.Code.DiagnosticPhase(),
+			Scenario:        eval.Scenario,
+			State:           eval.State,
+			Title:           eval.Title,
+			Explanation:     eval.Explanation,
+			Impact:          eval.Impact,
+			Summary:         eval.Summary,
+			LikelyOwner:     eval.LikelyOwner,
+			NextAction:      eval.NextAction,
+			Recommendations: func() []string {
+				if eval.NextAction != "" {
+					return []string{eval.NextAction}
+				}
+				return []string{}
+			}(),
 		},
 		Errors:   errorsList,
 		Warnings: warningsList,

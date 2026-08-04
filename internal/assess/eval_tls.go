@@ -31,6 +31,7 @@ func evaluateTLSValid(tgt *target.Target, tlsObs MinimalTLSObservation) Evaluati
 	imp := "DNS, TCP, and TLS validation look correct."
 	sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      %s\nTLS             %s\nAzure service   Not tested\n\nHTTP probing was disabled with --no-http.", destBlock, connStatusStr, tlsStatusStr)
 	return Evaluation{
+		Code:        CodeSuccess,
 		Scenario:    ScenarioPrivateTLSValid,
 		ExitCode:    0,
 		Title:       title,
@@ -58,6 +59,7 @@ func evaluateTLSNoneValid(tgt *target.Target, tlsObs MinimalTLSObservation) Eval
 		imp := "The application cannot establish a secure connection because certificate hostname validation failed."
 		sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Hostname mismatch\n\nThe address is reachable, but it presented a certificate for a different hostname.\n\nWhat to do:\nSend the detailed result to your network security team.", destBlock)
 		return Evaluation{
+			Code:        CodeTLSHostnameMismatch,
 			Scenario:    ScenarioPrivateTLSHostnameMismatch,
 			ExitCode:    6,
 			Title:       title,
@@ -75,6 +77,7 @@ func evaluateTLSNoneValid(tgt *target.Target, tlsObs MinimalTLSObservation) Eval
 		imp := "The application cannot establish a secure connection because certificate trust validation failed."
 		sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Certificate not trusted\n\nWhat to do:\nSend the detailed result to your application platform or network security team.", destBlock)
 		return Evaluation{
+			Code:        CodeTLSUntrusted,
 			Scenario:    ScenarioPrivateTLSUntrusted,
 			ExitCode:    6,
 			Title:       title,
@@ -92,6 +95,7 @@ func evaluateTLSNoneValid(tgt *target.Target, tlsObs MinimalTLSObservation) Eval
 		imp := "The application cannot establish a secure connection because the certificate is expired."
 		sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Certificate expired\n\nWhat to do:\nSend the detailed result to your service owner or network security team.", destBlock)
 		return Evaluation{
+			Code:        CodeTLSExpired,
 			Scenario:    ScenarioPrivateTLSExpired,
 			ExitCode:    6,
 			Title:       title,
@@ -109,6 +113,7 @@ func evaluateTLSNoneValid(tgt *target.Target, tlsObs MinimalTLSObservation) Eval
 		imp := "The workload could not complete TLS negotiation within the operation deadline."
 		sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Timed out\n\nThe TCP port is reachable, but the TLS handshake did not finish before the timeout.\n\nWhat to do:\nSend the detailed result to your network security team.", destBlock)
 		return Evaluation{
+			Code:        CodeTLSFailure,
 			Scenario:    ScenarioPrivateTLSTimeout,
 			ExitCode:    6,
 			Title:       title,
@@ -126,6 +131,7 @@ func evaluateTLSNoneValid(tgt *target.Target, tlsObs MinimalTLSObservation) Eval
 		imp := "The application cannot establish a secure TLS connection."
 		sum := fmt.Sprintf("%s\n\nPrivate DNS     Looks correct\nConnection      Working\nTLS             Failed\n\nThe private address is reachable, but TLS negotiation failed.\n\nWhat to do:\nSend the detailed result to your application platform or network security team.", destBlock)
 		return Evaluation{
+			Code:        CodeTLSFailure,
 			Scenario:    ScenarioPrivateTLSFailed,
 			ExitCode:    6,
 			Title:       title,
@@ -153,6 +159,7 @@ func evaluateTLSPartial(tgt *target.Target, tlsObs MinimalTLSObservation) Evalua
 	imp := "The application may behave differently depending on which address it uses."
 	sum := fmt.Sprintf("%s\n\nThe application may behave differently depending on which address it uses.\n\nWhat to do:\nSend the detailed result to your network security team.", destBlock)
 	return Evaluation{
+		Code:        CodeTLSFailure,
 		Scenario:    ScenarioPrivateTLSPartial,
 		ExitCode:    8,
 		Title:       "TLS works for only some private addresses",

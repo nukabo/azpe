@@ -64,7 +64,7 @@ Each resolved IP address is classified independently with explicit precedence ru
 
 When direct TCP probing and TLS validation succeed for private IP addresses (`VALID`), AZPE sends a single unauthenticated HTTPS GET request to `captured IP + port` using the original Azure service hostname as `Host` header and `ServerName` (SNI).
 
-- **Central product insight**: Any syntactically valid HTTP response (2xx, 3xx, 400, 401, 403, 404, 405, 409, 429, 5xx) proves that end-to-end network, TCP, TLS, and HTTP transport reached the Azure service.
+- **Central product insight**: Any syntactically valid HTTP response (2xx, 3xx, 400, 401, 403, 404, 405, 409, 429, 5xx) indicates that TCP, TLS, and HTTP transport to a responder for this hostname succeeded.
 - **HTTP 401 & 403**: Categorized as `AUTHENTICATION_REQUIRED` and `ACCESS_DENIED`. They return Exit Code `0` (`The Azure service responded`) because network transport is fully functional.
 - **No second DNS lookup**: Direct socket connection dials `net.JoinHostPort(capturedIP, port)`.
 - **Proxy bypass**: Environment proxy variables (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`) are explicitly ignored (`Proxy: nil`).
@@ -96,7 +96,7 @@ All machine-readable output generated with `--json` contains top-level field `sc
 Current schema version: `1`.
 
 Key schema conventions in `schemaVersion: 1`:
-- `engine` object includes `name` (`NATIVE` or `POWERSHELL_COMPAT`), `version` (`v0.1.0` or `v0.2.0-rc.1`), and engine-specific runtime capability metadata (`powerShellVersion`, `powerShellEdition`, `languageMode`).
+- `engine` object includes `name` (`NATIVE` or `POWERSHELL_COMPAT`), `version` (`VERSION`), and engine-specific runtime capability metadata (`powerShellVersion`, `powerShellEdition`, `languageMode`).
 - `dns` object includes `status`, `resolverMode` (`GO_BUILTIN`), `queryHostname`, `durationMs`, `addresses`, `aggregateClassification`, `isIpLiteral`.
 - `http` object includes `status`, `aggregateStatus`, `method`, `path`, `durationMs`, and `results` slice containing per-address observations.
 - Unobserved/skipped phases omit optional fields or serialize `results: []`.

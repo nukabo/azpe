@@ -16,6 +16,7 @@ func evaluateIPLiteral(tgt *target.Target) Evaluation {
 		sum = fmt.Sprintf("You entered an IP address:\n%s\n\n%s\n\nUse the Azure service hostname configured in your application.", tgt.Hostname, imp)
 	}
 	return Evaluation{
+		Code:        CodeInconclusive,
 		Scenario:    ScenarioIPLiteral,
 		ExitCode:    8,
 		Title:       "The Azure service hostname is required",
@@ -33,6 +34,7 @@ func evaluateUnrecognizedTarget(tgt *target.Target) Evaluation {
 	imp := "AZPE can only diagnose recognized Azure Private Endpoint targets."
 	sum := fmt.Sprintf("%s\n\nUse the Azure service hostname configured in your application, for example:\n  myvault.vault.azure.net\n  mystorage.blob.core.windows.net\n  mysearch.search.windows.net", ex)
 	return Evaluation{
+		Code:        CodeInconclusive,
 		Scenario:    ScenarioUnrecognizedTarget,
 		ExitCode:    8,
 		Title:       "Cannot test this target",
@@ -50,6 +52,7 @@ func evaluatePossibleAzure(tgt *target.Target) Evaluation {
 	imp := "No Private Endpoint conclusion was made."
 	sum := fmt.Sprintf("%s\n\n%s\n\nYou can use --details to view target information.", tgt.Hostname, imp)
 	return Evaluation{
+		Code:        CodeInconclusive,
 		Scenario:    ScenarioPossibleAzure,
 		ExitCode:    8,
 		Title:       "This Azure service is not supported yet",
@@ -62,11 +65,16 @@ func evaluatePossibleAzure(tgt *target.Target) Evaluation {
 	}
 }
 
-func evaluateDNSLookupFailed(tgt *target.Target) Evaluation {
+func evaluateDNSLookupFailed(tgt *target.Target, dnsStatus DNSStatus) Evaluation {
+	code := CodeDNSFailure
+	if dnsStatus == DNSStatusTimeout {
+		code = CodeDNSTimeout
+	}
 	ex := "The Azure service hostname could not be resolved."
 	imp := "DNS resolution failed from this execution environment."
 	sum := fmt.Sprintf("%s\n\nWhat to do:\nRun this check inside the affected workload. If it still fails, send this result to your network or DNS team.", tgt.Hostname)
 	return Evaluation{
+		Code:        code,
 		Scenario:    ScenarioDNSLookupFailed,
 		ExitCode:    3,
 		Title:       "The Azure service name cannot be resolved",
@@ -91,6 +99,7 @@ func evaluatePublicOnly(tgt *target.Target, addresses []string) Evaluation {
 	sum := fmt.Sprintf("%s\n\n%s\n\nWhat to do:\nIf this workload should connect privately, check the workload's DNS configuration or contact your network/DNS team.", addrBlock, imp)
 
 	return Evaluation{
+		Code:        CodeUnexpectedPublicResolution,
 		Scenario:    ScenarioPrivateDNSNotActive,
 		ExitCode:    4,
 		Title:       "This workload is not using private DNS",
@@ -119,6 +128,7 @@ func evaluateMixedDNS(tgt *target.Target, addresses []string, classifications []
 	sum := fmt.Sprintf("%s\n\n%s\n\nWhat to do:\nContact your network/DNS team to fix DNS resolution for this hostname.", addrBlock, imp)
 
 	return Evaluation{
+		Code:        CodeMixedAddressResolution,
 		Scenario:    ScenarioDNSMixed,
 		ExitCode:    8,
 		Title:       "DNS is returning both private and public addresses",
@@ -147,6 +157,7 @@ func evaluateSpecialOnly(tgt *target.Target, addresses []string, classifications
 	sum := fmt.Sprintf("%s\n\n%s\n\nWhat to do:\nCheck your DNS settings or local hosts file.", addrBlock, imp)
 
 	return Evaluation{
+		Code:        CodeInconclusive,
 		Scenario:    ScenarioSpecialOnly,
 		ExitCode:    8,
 		Title:       "DNS resolved to special-purpose IP addresses",

@@ -45,6 +45,7 @@ const (
 
 // Evaluation represents the structured outcome of the assessment decision engine.
 type Evaluation struct {
+	Code        AssessmentCode
 	Scenario    AssessmentScenario
 	ExitCode    int
 	Title       string
@@ -119,6 +120,7 @@ type MinimalHTTPResultItem interface {
 	GetResponseCategory() HTTPResponseCategory
 	GetDurationMs() int64
 	GetRedirectFollowed() bool
+	GetLocation() string
 	GetErrorCategory() string
 	GetError() string
 }

@@ -24,7 +24,7 @@ func Evaluate(tgt *target.Target, dnsStatus DNSStatus, aggClass AggregateClassif
 	// 4. Recognized Azure Service Hostname - Evaluate DNS Results
 	switch dnsStatus {
 	case DNSStatusNotFound, DNSStatusTimeout, DNSStatusTemporaryFailure, DNSStatusFailure:
-		return evaluateDNSLookupFailed(tgt)
+		return evaluateDNSLookupFailed(tgt, dnsStatus)
 	}
 
 	switch aggClass {
@@ -83,7 +83,7 @@ func Evaluate(tgt *target.Target, dnsStatus DNSStatus, aggClass AggregateClassif
 		return evaluateSpecialOnly(tgt, addresses, classifications)
 
 	default:
-		return evaluateDNSLookupFailed(tgt)
+		return evaluateDNSLookupFailed(tgt, dnsStatus)
 	}
 }
 
@@ -99,6 +99,7 @@ func evaluatePrivateDNSActiveFallback(tgt *target.Target, addresses []string) Ev
 	imp := "Connection not tested yet."
 	sum := ex
 	return Evaluation{
+		Code:        CodeSuccess,
 		Scenario:    ScenarioPrivateDNSActive,
 		ExitCode:    0,
 		Title:       "Private DNS looks correct",

@@ -179,20 +179,28 @@ func ProbeAll(ctx context.Context, prober Prober, ipObsList []model.IPObservatio
 	failedCount := 0
 
 	for _, ipObs := range ipObsList {
-		if ctx != nil && ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled) {
-			// Parent context was canceled before probing this IP
+		if ctx != nil && ctx.Err() != nil {
 			dest := net.JoinHostPort(ipObs.Address, strconv.Itoa(port))
+			status := assess.TCPAddrCanceled
+			errCat := "CANCELED"
+			errMsg := "Context canceled"
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				status = assess.TCPAddrTimedOut
+				errCat = "TIMEOUT"
+				errMsg = "Context deadline exceeded"
+			}
 			results = append(results, model.TCPResultItem{
 				Address:        ipObs.Address,
 				Version:        ipObs.Version,
 				Classification: ipObs.Classification,
 				Destination:    dest,
 				Port:           port,
-				Status:         assess.TCPAddrCanceled,
+				Status:         status,
 				DurationMs:     0,
-				ErrorCategory:  "CANCELED",
-				Error:          "Context canceled",
+				ErrorCategory:  errCat,
+				Error:          errMsg,
 			})
+			failedCount++
 			continue
 		}
 
